@@ -1,0 +1,194 @@
+/* =========================================================================
+   Pinewood Toss — styles for everything drawn on top of the 3D canvas.
+   The look is routed-wood park signage: dark bark panels, cream lettering,
+   a thin inset cream border. The game itself is a single full-screen canvas.
+   ========================================================================= */
+
+/* ---------- Design tokens ----------
+   Every color and font in the UI comes from these variables, so the palette
+   can be changed in one place. */
+:root {
+  --forest: #16241a;      /* page background behind the canvas */
+  --bark: #3d2819;        /* sign panels */
+  --cream: #f1e2bb;       /* main text */
+  --cream-dim: #c4b087;   /* labels, secondary text, sign border */
+  --moss: #a9c97a;        /* eyebrow labels on menus */
+  --xp: #9fd6ff;          /* XP bar and XP-related text (light end) */
+  --xp-lo: #3f7fd6;       /* XP bar (dark end) */
+  --hp: #ef6a52;          /* health bar (light end) */
+  --hp-lo: #9b2f22;       /* health bar (dark end) */
+  --danger: #f08a6c;      /* warnings: low HP, game over */
+  --ink: #120c07;         /* outlines and bar tracks */
+  --f-sign: "Patua One", "Rockwell", "Roboto Slab", Georgia, serif;
+  --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+/* ---------- Page basics ---------- */
+html, body { height: 100%; }
+[hidden] { display: none !important; } /* el.hidden = true always wins over display rules */
+body {
+  margin: 0; overflow: hidden; background: var(--forest); color: var(--cream);
+  font-family: var(--f-body); user-select: none; -webkit-user-select: none;
+}
+/* The WebGL canvas fills the window; everything else floats above it. */
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+/* ---------- Shared "wooden sign" panel ---------- */
+.sign {
+  background: var(--bark);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  /* two inset shadows draw the routed cream line just inside the edge */
+  box-shadow: inset 0 0 0 3px var(--bark), inset 0 0 0 4px var(--cream-dim), 0 8px 22px rgba(0,0,0,.35);
+}
+/* Small uppercase sign lettering used for labels and eyebrows */
+.lbl { font-family: var(--f-sign); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--cream-dim); }
+
+/* ---------- Scoreboard (top left): survival clock, kills, best, threat, owned perks ---------- */
+#hud {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  padding: 12px 16px 12px; min-width: 176px; max-width: 250px;
+  display: grid; gap: 4px; pointer-events: none;
+}
+#hud .big { font-family: var(--f-sign); font-size: 46px; line-height: 1; font-variant-numeric: tabular-nums; }
+#hud .sub { display: flex; gap: 14px; font-size: 13px; color: var(--cream-dim); font-variant-numeric: tabular-nums; }
+#hud .sub b { color: var(--cream); font-weight: 700; }
+/* the threat number flashes red each time it goes up */
+#threat.up { animation: threat .8s ease-out; }
+@keyframes threat { 0% { color: var(--danger); text-shadow: 0 0 10px var(--hp-lo); } }
+/* list of perks you own, e.g. "Split Shot 2" */
+#owned { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(196,176,135,.3); font-size: 12px; color: var(--cream); }
+#owned span b { color: var(--xp); margin-left: 3px; }
+
+/* ---------- Crosshair (screen center) ---------- */
+.reticle {
+  position: fixed; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border: 2px solid rgba(241, 226, 187, .85); border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35); pointer-events: none;
+}
+.reticle::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px;
+  background: var(--cream); border-radius: 50%;
+}
+
+/* ---------- Vitals (bottom center): HP bar and level/XP bar ---------- */
+#vitals {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+  width: min(480px, calc(100% - 32px));
+  display: grid; gap: 7px; padding: 10px 14px; pointer-events: none;
+}
+.meter { display: grid; grid-template-columns: 56px 1fr 86px; align-items: center; gap: 12px; }
+.meter .tag { font-family: var(--f-sign); font-size: 13px; letter-spacing: .1em; color: var(--cream-dim); white-space: nowrap; }
+.meter .tag b { font-weight: 400; color: var(--cream); font-size: 17px; margin-left: 2px; }
+.track { height: 11px; border-radius: 6px; background: var(--ink); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(241,226,187,.15); }
+.track > div { height: 100%; width: 0; transition: width .2s ease-out; }
+#hpfill { background: linear-gradient(90deg, var(--hp-lo), var(--hp)); width: 100%; }
+#xpfill { background: linear-gradient(90deg, var(--xp-lo), var(--xp)); }
+.meter .num { text-align: right; font-size: 12px; color: var(--cream-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* blue glow when you level up */
+#vitals.glow { animation: glow .5s ease-out; }
+@keyframes glow { 0% { box-shadow: inset 0 0 0 3px var(--bark), inset 0 0 0 4px var(--xp), 0 0 26px var(--xp-lo); } }
+/* "HP" label turns red under 30% health */
+#vitals.low .meter:first-child .tag { color: var(--danger); }
+
+/* ---------- Red damage vignette (opacity driven from game.js) ---------- */
+#hurt {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(120,10,5,0) 50%, rgba(150,18,10,.7) 100%);
+}
+
+/* ---------- Controls hint (bottom edge) ---------- */
+#hint {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  font-size: 12px; color: var(--cream); text-shadow: 0 1px 2px rgba(0,0,0,.7);
+  white-space: nowrap; pointer-events: none; opacity: .85;
+}
+kbd {
+  font-family: var(--f-body); font-size: 11px; font-weight: 700;
+  padding: 1px 6px; border-radius: 4px; background: var(--cream); color: var(--bark);
+  box-shadow: 0 2px 0 var(--cream-dim);
+}
+
+/* ---------- Floating text in the world (damage numbers, "+30 HP", ...) ----------
+   hud.js positions each .pop over a 3D point every frame. */
+.pop {
+  position: fixed; transform: translate(-50%, -50%); pointer-events: none; white-space: nowrap;
+  font-family: var(--f-sign); font-size: 22px; color: var(--cream);
+  text-shadow: 0 2px 0 var(--ink), 0 0 10px rgba(0,0,0,.5);
+}
+.pop span { font-size: 14px; color: var(--xp); margin-left: 6px; }
+.pop.small { font-size: 15px; }
+.pop.crit { color: #ffcf5a; font-size: 24px; }
+.pop.heal { color: #ff9aa6; }
+.pop.magnet { color: var(--xp); }
+
+/* ---------- Full-screen menus: title/pause (#overlay), perk choice (#perks), game over (#over) ---------- */
+#overlay, #perks, #over {
+  position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; overflow-y: auto;
+  background: radial-gradient(ellipse at center, rgba(14,22,15,.25), rgba(14,22,15,.82));
+}
+#overlay { cursor: pointer; } /* clicking anywhere on the title/pause screen starts or resumes */
+.board { width: 100%; max-width: 430px; padding: 24px 26px 22px; display: grid; gap: 16px; cursor: default; }
+.eyebrow { color: var(--moss); }
+#over .eyebrow { color: var(--danger); }
+.board h1, #perks h2 {
+  margin: 0; font-family: var(--f-sign); font-weight: 400; text-transform: uppercase;
+  letter-spacing: .05em; line-height: .95; text-wrap: balance;
+}
+.board h1 { font-size: clamp(34px, 8vw, 46px); }
+#over h1 { font-size: clamp(52px, 14vw, 76px); font-variant-numeric: tabular-nums; } /* survival time */
+.board p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--cream); max-width: 36ch; }
+/* controls list on the title screen */
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; font-size: 14px; margin: 0; }
+.keys dt { display: flex; gap: 4px; }
+.keys dd { margin: 0; color: var(--cream-dim); }
+/* big cream buttons: "Enter the forest", "Try again" */
+.go {
+  justify-self: start; border: 0; border-radius: 6px; cursor: pointer;
+  padding: 12px 20px; background: var(--cream); color: var(--bark);
+  font-family: var(--f-sign); font-size: 18px; letter-spacing: .06em; text-transform: uppercase;
+  box-shadow: 0 3px 0 var(--cream-dim);
+}
+.go:hover { background: #fff3d2; }
+.go:focus-visible { outline: 3px solid var(--moss); outline-offset: 3px; }
+.note { font-size: 12px; color: var(--cream-dim); }
+/* "Level 6 · Creatures 83 · Best 4:12" on the game-over screen */
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--cream-dim); font-variant-numeric: tabular-nums; }
+.facts b { color: var(--cream); }
+
+/* ---------- Perk choice: three cards dealt onto the screen ---------- */
+#perks { background: rgba(14,22,15,.55); }
+.perk-wrap { width: 100%; max-width: 860px; display: grid; gap: 14px; justify-items: center; text-align: center; }
+#perks h2 { font-size: clamp(30px, 6vw, 42px); }
+.cards { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 6px; }
+.card {
+  font: inherit; color: var(--cream); text-align: left; cursor: pointer;
+  padding: 18px 18px 16px; display: grid; gap: 10px; align-content: start;
+  transition: transform .12s ease-out, box-shadow .12s ease-out;
+  animation: deal .3s ease-out backwards;
+}
+.card:nth-child(2) { animation-delay: .06s; }
+.card:nth-child(3) { animation-delay: .12s; }
+@keyframes deal { from { transform: translateY(14px); opacity: 0; } }
+.card:hover, .card:focus-visible {
+  transform: translateY(-3px); outline: none;
+  box-shadow: inset 0 0 0 3px var(--bark), inset 0 0 0 4px var(--xp), 0 12px 28px rgba(0,0,0,.45);
+}
+.card .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card .pname { font-family: var(--f-sign); font-size: 22px; line-height: 1.1; }
+.card .pdesc { font-size: 14px; line-height: 1.45; color: var(--cream-dim); }
+/* rank pips: filled = ranks owned, blue = the rank this card would give */
+.pips { display: flex; gap: 4px; }
+.pips i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--cream-dim); }
+.pips i.on { background: var(--cream-dim); }
+.pips i.next { background: var(--xp); border-color: var(--xp); }
+
+/* ---------- Small screens and reduced motion ---------- */
+@media (max-width: 700px) { .cards { grid-template-columns: 1fr; } .card { padding: 12px 14px; gap: 6px; } }
+@media (max-width: 520px) { #hint { display: none; } #vitals { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); } }
+@media (prefers-reduced-motion: reduce) { .card { animation: none; } }
