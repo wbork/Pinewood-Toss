@@ -23,9 +23,18 @@
     <div class="lbl">Survived</div>
     <div class="big" id="clock">0:00</div>
     <div class="sub"><span>Kills <b id="kills">0</b></span><span>Best <b id="best">–</b></span></div>
-    <div class="sub"><span>Threat level <b id="threat">1</b></span></div>
+    <div class="sub"><span>Threat level <b id="threat">1</b></span><span class="coins">Coins <b id="coins">0</b></span></div>
+    <div class="sub score-row" id="score-row" hidden><span>Score <b id="score">0</b></span></div> <!-- after the Hollow King (bosses.js) -->
     <div id="owned" hidden></div>
   </div>
+
+  <!-- Boss health bar, top center, while a boss is alive (js/bosses.js). -->
+  <div id="bossbar" class="sign" hidden>
+    <div class="row"><span id="bossname" class="lbl">Boss</span><span id="bosshp">0 / 0</span></div>
+    <div class="track"><div id="bossfill"></div></div>
+  </div>
+  <!-- Big announcement when a boss arrives or falls (js/bosses.js → banner). -->
+  <div id="banner" hidden></div>
 
   <!-- Crosshair: throws land on whatever is under it (js/camera.js → aimPoint). -->
   <div class="reticle"></div>
@@ -35,30 +44,83 @@
     <div class="meter"><span class="tag">HP</span><div class="track"><div id="hpfill"></div></div><span class="num" id="hptext">100 / 100</span></div>
     <div class="meter"><span class="tag">LVL<b id="lvl">1</b></span><div class="track"><div id="xpfill"></div></div><span class="num" id="xptext">0 / 8 XP</span></div>
   </div>
-  <div id="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · click to throw · <kbd>Esc</kbd> pause</div>
+  <!-- "E  Open Rare chest · 45 coins" when standing at a chest (js/chests.js). -->
+  <div id="prompt" hidden></div>
+  <div id="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · click or hold to fire · <kbd>E</kbd> chest · <kbd>Esc</kbd> pause</div>
 
-  <!-- Title screen, also reused as the pause screen. Clicking anywhere on it starts or resumes. -->
-  <div id="overlay">
-    <div class="board sign">
-      <div class="lbl eyebrow">Pinewood State Forest · after dark</div>
-      <h1>Pinewood Toss</h1>
-      <p id="blurb">You're the last ranger of Pinewood, a deer with a good arm. Creatures crawl out of the woods and hunt you down. Keep throwing, scoop up the blue XP they drop and pick a perk every level. They get stronger the longer you last.</p>
-      <dl class="keys">
-        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Walk</dd>
-        <dt><kbd>Mouse</kbd></dt><dd>Look around</dd>
-        <dt><kbd>Click</kbd></dt><dd>Throw a ball</dd>
-        <dt><kbd>Shift</kbd> <kbd>Space</kbd></dt><dd>Run, jump</dd>
-      </dl>
-      <button id="go" class="go" type="button">Enter the forest</button>
-      <div class="note">Hearts heal you. Magnets pull in every XP orb on the map. Needs a keyboard and mouse.</div>
+  <!-- Title screen (js/game.js). The forest shows behind it while the camera slowly circles the deer. -->
+  <div id="title" class="screen">
+    <div class="title-wrap">
+      <header class="logo">
+        <!-- a pine tree on a little wooden sign -->
+        <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="4" y="4" width="56" height="56" rx="10" fill="#3d2819" stroke="#120c07" stroke-width="3"/>
+          <rect x="8.5" y="8.5" width="47" height="47" rx="7" fill="none" stroke="#c4b087" stroke-width="1.5"/>
+          <path d="M32 12 L44 28 H38 L47 40 H39 L49 50 H15 L25 40 H17 L26 28 H20 Z" fill="#a9c97a"/>
+          <rect x="29" y="50" width="6" height="6" fill="#c4b087"/>
+        </svg>
+        <div class="lbl eyebrow">Pinewood State Forest · after dark</div>
+        <h1 class="logo-text"><span>Pinewood</span><span>Toss</span></h1>
+        <p class="tagline">One deer ranger. A good arm. A forest that wants you gone.</p>
+      </header>
+      <div class="title-grid">
+        <section class="sign panel">
+          <!-- Pick the weapon each run starts with (js/weapons.js fills it). -->
+          <div class="start-pick" id="start-pick"></div>
+          <button id="go" class="go big" type="button">Enter the forest</button>
+          <button id="howto-open" class="link" type="button">How to play</button>
+        </section>
+        <!-- Your best runs (filled by js/besttimes.js). -->
+        <section class="times sign panel" id="times-title"></section>
+      </div>
+      <div class="title-foot">Survive the Thorn Queen at 5:00 and the Hollow King at 10:00, then score as long as you can. Needs a keyboard and mouse.</div>
     </div>
   </div>
 
-  <!-- Level-up perk choice. js/perks.js fills #cards with three options. -->
+  <!-- How to play, opened from the title screen. -->
+  <div id="howto" class="screen" hidden>
+    <div class="board sign wide">
+      <div class="lbl eyebrow">Field guide</div>
+      <h1>How to play</h1>
+      <div class="howto-grid">
+        <dl class="keys">
+          <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Walk</dd>
+          <dt><kbd>Mouse</kbd></dt><dd>Look around</dd>
+          <dt><kbd>Click</kbd></dt><dd>Fire aimed weapons (hold to keep firing)</dd>
+          <dt><kbd>Shift</kbd></dt><dd>Run</dd>
+          <dt><kbd>Space</kbd></dt><dd>Jump (over shockwaves, onto rocks)</dd>
+          <dt><kbd>E</kbd></dt><dd>Open a chest (costs coins)</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Pause</dd>
+        </dl>
+        <ul class="tips">
+          <li><b>Level up</b> on the blue XP creatures drop. Each level, pick a new weapon (carry up to four) or an upgrade.</li>
+          <li><b>Fuse</b> two weapons that work together by maxing both: they become one much stronger weapon and free a slot.</li>
+          <li><b>Coins</b> buy chests. A chest's glow shows its rarity; rarer items are stronger.</li>
+          <li><b>Glowing creatures</b> are about to use their ability: dodge the pounce, the charge, the bolt.</li>
+          <li><b>Bosses</b> arrive at 5:00 and 10:00. Step out of red circles and jump shockwaves.</li>
+          <li><b>After the Hollow King</b> the forest rages: every kill and every second scores points until you fall.</li>
+        </ul>
+      </div>
+      <button id="howto-close" class="go" type="button">Back</button>
+    </div>
+  </div>
+
+  <!-- Pause screen (Esc). -->
+  <div id="pause" class="screen" hidden>
+    <div class="board sign">
+      <div class="lbl eyebrow">Paused</div>
+      <h1>Catch your breath</h1>
+      <p id="blurb"></p>
+      <button id="resume" class="go" type="button">Back to the woods</button>
+      <button id="quit" class="link" type="button">Quit to title</button>
+    </div>
+  </div>
+
+  <!-- Level-up choice: new weapons and weapon upgrades. js/levelup.js fills #cards with three options. -->
   <div id="perks" hidden>
     <div class="perk-wrap">
-      <div class="lbl eyebrow">Level <span id="perk-lvl">2</span> reached</div>
-      <h2>Pick a perk</h2>
+      <div class="lbl eyebrow">Level <span id="perk-lvl">2</span> reached · <span id="perk-slots">Weapons 1 / 4</span></div>
+      <h2 id="perk-title">Pick a weapon or upgrade</h2>
       <div class="cards" id="cards"></div>
       <div class="note">Click a card or press 1, 2 or 3.</div>
     </div>
@@ -70,7 +132,11 @@
       <div class="lbl eyebrow">The forest got you</div>
       <h1 id="over-time">0:00</h1>
       <div class="facts" id="over-facts"></div>
+      <!-- Best times with this run highlighted (filled by js/besttimes.js). -->
+      <div class="times" id="times-over"></div>
+      <div class="start-pick"></div>
       <button id="again" class="go" type="button">Try again</button>
+      <button id="to-title" class="link" type="button">Title screen</button>
     </div>
   </div>
 
@@ -89,14 +155,20 @@
   <script src="js/materials.js"></script> <!-- textures, materials, mesh helper -->
   <script src="js/audio.js"></script>     <!-- sound effects -->
   <script src="js/hud.js"></script>       <!-- scoreboard, bars, floating text -->
+  <script src="js/besttimes.js"></script> <!-- your 10 best survival times -->
   <script src="js/effects.js"></script>   <!-- wood chips and splash rings -->
-  <script src="js/perks.js"></script>     <!-- perks, XP and leveling, perk menu -->
+  <script src="js/items.js"></script>     <!-- stat items from chests, and the player's stats (mod) -->
   <script src="js/pickups.js"></script>   <!-- XP orbs, hearts, magnets -->
-  <script src="js/creatures.js"></script> <!-- what each creature looks like and its stats -->
+  <script src="js/hazards.js"></script>   <!-- creature bolts, poison clouds, ground eruptions, shockwaves -->
+  <script src="js/creatures.js"></script> <!-- each creature's stats, looks, and special ability -->
   <script src="js/enemies.js"></script>   <!-- spawning, chasing, attacking, taking damage -->
   <script src="js/deer.js"></script>      <!-- the player's deer ranger model and animation -->
   <script src="js/camera.js"></script>    <!-- over-the-shoulder camera and crosshair aiming -->
-  <script src="js/combat.js"></script>    <!-- throwing balls and ball physics -->
+  <script src="js/combat.js"></script>    <!-- launching projectiles and their physics -->
+  <script src="js/weapons.js"></script>   <!-- the eight weapons, their upgrades and synergies -->
+  <script src="js/levelup.js"></script>   <!-- XP, leveling, the level-up menu -->
+  <script src="js/chests.js"></script>    <!-- chests that hold stat items -->
+  <script src="js/bosses.js"></script>    <!-- the 5:00 and 10:00 bosses, health bar, banner -->
   <script src="js/player.js"></script>    <!-- player movement and taking damage -->
   <script src="js/game.js"></script>      <!-- input, menus, start/pause/game over, main loop -->
 </body>

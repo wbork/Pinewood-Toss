@@ -15,7 +15,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;    // soft-edged shadows
 const scene = new THREE.Scene();
 // Fog fades distant things into the sky color; it turns purple-grey at dusk.
 const FOG_DAY = new THREE.Color(0xc9dcc4), FOG_DUSK = new THREE.Color(0x8a7f98);
-scene.fog = new THREE.Fog(FOG_DAY.getHex(), 35, 175);
+scene.fog = new THREE.Fog(FOG_DAY.getHex(), 45, 230);
 
 // ---------- Camera ----------
 // camera.js places it behind the deer every frame. 'YXZ' order means yaw is

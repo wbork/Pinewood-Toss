@@ -11,7 +11,7 @@ function buildDeer() {
   const fur = std({ color: 0xa8703f }), pale = std({ color: 0xe9d6b0 }), dark = std({ color: 0x2a1a10 });
   const horn = std({ color: 0xe6d6ae }), vest = std({ color: 0x55683a }), badge = std({ color: 0xe7b84a, metalness: 0.6, roughness: 0.4 });
   // mats: the materials that flash red when hurt. phase: walk cycle. throwT/fall/flash: animation timers.
-  const d = { root: new THREE.Group(), mats: [fur, vest, pale], phase: 0, throwT: 0, fall: 0, flash: 0, facing: 0 };
+  const d = { root: new THREE.Group(), mats: [fur, vest, pale], phase: 0, throwT: 0, sweepT: 0, fall: 0, flash: 0, facing: 0 };
   d.root.rotation.order = 'YXZ'; // turn (Y) first, then tip over (X) when falling
 
   // ---- Torso, hanging off the hips at waist height ----
@@ -82,6 +82,9 @@ function updateDeer(dt, follow) {
     d.facing += turn * Math.min(1, dt * 14);
   }
   d.root.rotation.y = d.facing + Math.PI; // the model faces +z; yaw 0 means looking toward -z
+  // Antler Sweep (weapons.js): one quick full spin with the head lowered (sweepT runs 1 → 0)
+  d.sweepT = Math.max(0, d.sweepT - dt * 3.5);
+  if (d.sweepT > 0) d.root.rotation.y += (1 - d.sweepT) * Math.PI * 2;
 
   // Walk cycle. `amt` is 0 standing still and 1 at walking speed or faster.
   const sp = playing ? Math.hypot(player.vel.x, player.vel.z) : 0, amt = Math.min(1, sp / 5.5);
@@ -103,7 +106,7 @@ function updateDeer(dt, follow) {
   // Bob while walking; breathe gently while standing.
   const breathe = reduceMotion ? 0 : Math.sin(performance.now() / 600) * 0.008 * (1 - amt);
   d.hips.position.y = 0.95 + Math.abs(Math.cos(d.phase)) * 0.05 * amt + breathe;
-  d.head.rotation.x = -pitch * 0.45; // look up and down with the camera
+  d.head.rotation.x = -pitch * 0.45 + Math.sin(d.sweepT * Math.PI) * 0.7; // look up and down with the camera (and dip for a sweep)
 
   // Flash red when hurt.
   if (d.flash > 0) {

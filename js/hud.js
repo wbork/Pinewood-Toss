@@ -13,6 +13,8 @@ const fmt = v => String(Math.round(v * 10) / 10);
 /** Refresh kills, best time, level, XP bar and HP bar. Call after anything they show changes. */
 function hud() {
   $('kills').textContent = stats.kills;
+  $('coins').textContent = Math.floor(money);
+  $('score').textContent = score.toLocaleString();
   $('best').textContent = best ? clockText(best) : '–';
   $('lvl').textContent = prog.level;
   $('xptext').textContent = Math.floor(prog.xp) + ' / ' + need(prog.level) + ' XP';
@@ -28,11 +30,25 @@ function vitals() {
   $('vitals').classList.toggle('low', hp / max < 0.3);
 }
 
-/** List owned perks under the scoreboard, e.g. "Split Shot 2  Big Ball 1". */
+/**
+ * Under the scoreboard: your weapon slots (weapons with their levels, fusions in gold,
+ * empty slots), any active synergies, and the items you've found with how many of each.
+ */
 function renderOwned() {
-  const owned = PERKS.filter(p => rank[p.id]);
-  $('owned').hidden = !owned.length;
-  $('owned').innerHTML = owned.map(p => '<span>' + p.name + '<b>' + rank[p.id] + '</b></span>').join('');
+  let html = '<div class="own-row">';
+  for (let i = 0; i < MAX_WEAPONS; i++) {
+    const id = owned[i];
+    html += !id ? '<span class="slot empty">empty slot</span>'
+      : SYN[id] ? '<span class="slot fused" title="' + WEAPONS[SYN[id].a].name + ' + ' + WEAPONS[SYN[id].b].name + '. ' + SYN[id].power + '">' + SYN[id].fusion + '</span>'
+      : '<span class="slot">' + WEAPONS[id].name + '<b>' + wlv[id] + '</b></span>';
+  }
+  html += '</div>';
+  const syns = SYNERGIES.filter(s => syn(s.id) && !owned.includes(s.id)); // fused ones already show as a slot
+  if (syns.length) html += '<div class="own-row syns">' + syns.map(s => '<span>' + s.name + '</span>').join('') + '</div>';
+  const got = ITEMS.filter(it => bag[it.id]);
+  if (got.length) html += '<div class="own-row">' + got.map(it => '<span class="item ' + it.rarity + '">' + it.name + (bag[it.id] > 1 ? '<b>×' + bag[it.id] + '</b>' : '') + '</span>').join('') + '</div>';
+  $('owned').hidden = false;
+  $('owned').innerHTML = html;
 }
 
 /** Restart a CSS animation class on an element (used for the level-up glow and threat flash). */

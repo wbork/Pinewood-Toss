@@ -20,11 +20,11 @@ function placeCamera(dt) {
   // f = the direction the camera looks; the camera sits behind the pivot along -f
   const fx = -Math.sin(yaw) * cp, fy = Math.sin(pitch), fz = -Math.cos(yaw) * cp;
   const px = p.x + Math.cos(yaw) * CAM.side, py = p.y + CAM.height, pz = p.z - Math.sin(yaw) * CAM.side;
-  // walk back along the boom; if a point dips into the ground, stop just short of it
+  // walk back along the boom; if a point dips into the ground (or water), stop just short of it
   let len = CAM.back;
   for (let t = 0.5; t <= CAM.back; t += 0.15) {
     const x = px - fx * t, y = py - fy * t, z = pz - fz * t;
-    if (y < h(x, z) + 0.35) { len = Math.max(1.2, t - 0.2); break; }
+    if (y < surfH(x, z) + 0.35) { len = Math.max(1.2, t - 0.2); break; }
   }
   // pull in quickly, ease back out slowly, so it never snaps
   camLen += (len - camLen) * Math.min(1, dt * (len < camLen ? 10 : 4));
@@ -37,26 +37,27 @@ function placeCamera(dt) {
 const ray = new V3(), rayO = new V3(), rayC = new V3();
 
 /**
- * The 3D point under the crosshair: the first creature along the camera's line of
- * sight, otherwise where that line meets the ground, otherwise a point 50 m away.
- * Throws are aimed at this point (combat.js).
+ * The 3D point under the crosshair: the middle of the first creature along the
+ * camera's line of sight, otherwise where that line meets the ground, otherwise a
+ * point 50 m away. Aimed weapons fire at this point (weapons.js).
  */
 function aimPoint(out) {
   camera.getWorldDirection(ray);
   rayO.copy(camera.position);
   const minT = camLen + 0.5; // ignore anything between the camera and the deer
-  let best = 50;
+  let best = 50, target = null;
   // creatures: treat each as a sphere around its middle, slightly padded so they're easier to target
   for (const e of foes) {
     if (e.state === 'dying') continue;
     centerOf(e, rayC).sub(rayO);
     const t = rayC.dot(ray), rr = e.def.r + 0.2 + (e.def.hi - e.def.lo) / 2;
-    if (t > minT && t < best && rayC.lengthSq() - t * t < rr * rr) best = t;
+    if (t > minT && t < best && rayC.lengthSq() - t * t < rr * rr) { best = t; target = e; }
   }
-  // ground: step along the line every 0.5 m until it goes underground
+  // ground: step along the line every 0.5 m until it goes underground (or under water)
   for (let t = minT; t < best; t += 0.5) {
     const x = rayO.x + ray.x * t, y = rayO.y + ray.y * t, z = rayO.z + ray.z * t;
-    if (y < h(x, z)) { best = t; break; }
+    if (y < surfH(x, z)) { best = t; target = null; break; }
   }
-  return out.copy(rayO).addScaledVector(ray, best);
+  // aim at the creature's middle, not the edge of its padded sphere, so flat shots don't skim over it
+  return target ? centerOf(target, out) : out.copy(rayO).addScaledVector(ray, best);
 }

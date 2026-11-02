@@ -1,6 +1,6 @@
 /* =========================================================================
-   pickups.js — things creatures drop: blue XP orbs, hearts that heal, and
-   magnets that pull every XP orb on the map to you.
+   pickups.js — things creatures drop: blue XP orbs, gold coins, hearts that
+   heal, and magnets that pull every orb and coin on the map to you.
    ========================================================================= */
 
 // ---------- XP orbs ----------
@@ -27,6 +27,29 @@ function dropXP(at, xp) {
   while (orbs.length > 400) scene.remove(orbs.shift().g); // safety cap: drop the oldest
 }
 
+// ---------- Coins ----------
+// Gold coins behave just like XP orbs (pop out, hover, fly to you, get pulled by magnets)
+// but add to `money`, which buys chests (chests.js). They share the orbs list; o.coin marks them.
+const coinGeo = new THREE.CylinderGeometry(1, 1, 0.25, 12).rotateX(Math.PI / 2); // a disc standing on its edge
+const coinMat = std({ color: 0xf2c14e, emissive: 0x5a3c00, roughness: 0.35, metalness: 0.6, flatShading: false });
+const coinGlow = glow(0xffc85a);
+
+/** Drop `value` coins at point `at`. Fractions round up by chance, so 2.4 is 2 coins 60% of the time and 3 otherwise. */
+function dropCoins(at, value) {
+  let left = Math.floor(value) + (Math.random() < value % 1 ? 1 : 0);
+  while (left > 0) {
+    const v = left >= 25 ? 10 : left >= 8 ? 5 : 1, s = v >= 10 ? 0.2 : v >= 5 ? 0.16 : 0.12; // bigger coins are worth more
+    left -= v;
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(coinGeo, coinMat); core.scale.setScalar(s);
+    const halo = new THREE.Sprite(coinGlow); halo.scale.setScalar(s * 4);
+    g.add(core, halo); g.position.copy(at);
+    scene.add(g);
+    const a = Math.random() * 6.28, sp = 1.5 + Math.random() * 2.5;
+    orbs.push({ g, core, v, coin: true, age: 0, phase: Math.random() * 6, homing: false, vacuum: false, vel: new V3(Math.cos(a) * sp, 4 + Math.random() * 3, Math.sin(a) * sp) });
+  }
+}
+
 /** Move orbs: fall and hover, or fly to the deer and get collected. Called every frame while playing. */
 function stepOrbs(dt) {
   const chest = tmp2.set(player.pos.x, player.pos.y + 1.0, player.pos.z); // orbs fly to the deer's chest
@@ -44,14 +67,15 @@ function stepOrbs(dt) {
       p.addScaledVector(o.vel, dt);
       if (p.distanceTo(chest) < 0.6) {
         scene.remove(o.g); orbs.splice(i, 1);
-        sfx.pick(); gainXP(o.v);
+        if (o.coin) { money += o.v; sfx.coin(); hud(); }
+        else { sfx.pick(); gainXP(o.v); }
         continue;
       }
     } else {
-      // gravity, then a gentle bob a little above the ground
+      // gravity, then a gentle bob a little above the ground (or the water)
       o.vel.y -= G * 0.6 * dt;
       p.addScaledVector(o.vel, dt);
-      const floor = h(p.x, p.z) + 0.35 + Math.sin(o.age * 3 + o.phase) * 0.07;
+      const floor = surfH(p.x, p.z) + 0.35 + Math.sin(o.age * 3 + o.phase) * 0.07;
       if (p.y < floor) {
         p.y = floor; o.vel.y = Math.max(0, -o.vel.y * 0.3);
         const fr = Math.pow(0.02, dt); o.vel.x *= fr; o.vel.z *= fr;
@@ -64,9 +88,10 @@ function stepOrbs(dt) {
 // ---------- Hearts and magnets ----------
 // Rare drops (chances are in enemies.js → killFoe). They bob and spin, last 35 s,
 // and blink during their final 7 s. Walk into one to use it.
-const items = [];
+// (Not to be confused with the stat items from chests, in items.js.)
+const drops = [];
 
-/** Drop an item ('heart' or 'magnet') at point `at`. */
+/** Drop a 'heart' or 'magnet' at point `at`. */
 function dropItem(kind, at) {
   const g = new THREE.Group();
   if (kind === 'heart') {
@@ -82,17 +107,17 @@ function dropItem(kind, at) {
   }
   g.position.copy(at);
   scene.add(g);
-  items.push({ kind, g, age: 0, vy: 4 }); // vy: a small upward pop when dropped
+  drops.push({ kind, g, age: 0, vy: 4 }); // vy: a small upward pop when dropped
 }
 
-/** Animate items and handle pickup. Called every frame while playing. */
-function stepItems(dt) {
-  for (let i = items.length - 1; i >= 0; i--) {
-    const it = items[i], p = it.g.position;
+/** Animate hearts and magnets and handle pickup. Called every frame while playing. */
+function stepDrops(dt) {
+  for (let i = drops.length - 1; i >= 0; i--) {
+    const it = drops[i], p = it.g.position;
     it.age += dt;
     it.vy -= G * 0.5 * dt;
     p.y += it.vy * dt;
-    const floor = h(p.x, p.z) + 0.6 + Math.sin(it.age * 3) * 0.1;
+    const floor = surfH(p.x, p.z) + 0.6 + Math.sin(it.age * 3) * 0.1;
     if (p.y < floor) { p.y = floor; it.vy = 0; }
     it.g.rotation.y += dt * 2;
     it.g.visible = it.age < 28 || Math.floor(it.age * 8) % 2 === 0; // blink before vanishing
@@ -109,7 +134,7 @@ function stepItems(dt) {
         pop(p.clone().add(nrm.set(0, 0.6, 0)), 'XP magnet', orbs.length ? orbs.length + ' orbs' : '', 'magnet');
         sfx.magnet();
       }
-      scene.remove(it.g); items.splice(i, 1);
-    } else if (it.age > 35) { scene.remove(it.g); items.splice(i, 1); }
+      scene.remove(it.g); drops.splice(i, 1);
+    } else if (it.age > 35) { scene.remove(it.g); drops.splice(i, 1); }
   }
 }

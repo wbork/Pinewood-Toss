@@ -1,68 +1,88 @@
 /* =========================================================================
-   combat.js — throwing balls and simulating them: arcs, bounces off the
-   ground, trunks and rocks, slowing down in leaves, and hitting creatures
-   (with the Pinecone Burst splash and Ricochet perks).
+   combat.js — everything that's thrown: launching projectiles on an arc,
+   and simulating them as they fly, bounce off the ground, trunks and rocks,
+   slow down in leaves, splash into lakes and hit creatures.
+
+   The aimed weapons in weapons.js (Pine Ball, Acorn Sling, Beehive, Frost
+   Cone) all launch through here and differ only in the options they pass:
+   - roll:   bounces and rolls along the ground like a ball (Pine Ball)
+   - pierce: passes through this many creatures before stopping (acorns)
+   - rico:   after a hit, flies on to the nearest other creature this many times
+   - burst:  a function called at the first thing it touches; then it's gone (hive, frost)
+   - grav:   how strongly gravity pulls it (1 = normal; acorns fly flatter)
+   Anything that isn't `roll` disappears when it hits the ground.
    ========================================================================= */
 
-const BALL_R = 0.16;  // ball radius in meters before the Big Ball perk
-const MAX_BALLS = 70; // oldest balls are removed past this
+const BALL_R = 0.16;  // Pine Ball radius in meters, before size items
+const MAX_BALLS = 90; // oldest projectiles are removed past this
 const ballGeo = new THREE.SphereGeometry(BALL_R, 16, 12);
 const ballMat = new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.6 });
 
-// Each ball: mesh, radius r, velocity vel, age, rest (seconds lying still),
-// leafy (inside leaves last step), rico (ricochets left), last/lastAge (last creature hit, and when).
+// Each projectile: mesh, r (radius), vel, age, rest (seconds lying still), dead, the
+// options above, dmg, w (weapon id), onHit (optional extra effect per creature hit),
+// leafy/wet (inside leaves/water last step), last/lastAge (last creature hit, and when).
 const balls = [];
 
-/** Throw (if the cooldown allows): from the deer's right shoulder, on an arc that lands on the crosshair. */
-function throwBall() {
-  if (throwCooldown > 0) return;
-  throwCooldown = mod.cooldown;
-  const n = 1 + rank.split, r = mod.ballR, f = deer.facing;
-  // launch point: 0.3 m right, 0.2 m forward and 1.85 m up from the deer's feet
-  const from = new V3(player.pos.x + Math.cos(f) * 0.3 - Math.sin(f) * 0.2, player.pos.y + 1.85, player.pos.z - Math.sin(f) * 0.3 - Math.cos(f) * 0.2);
-  // Solve the arc: fly the distance in time T at throw speed, adding just enough
-  // upward speed that gravity brings the ball down exactly on the target.
-  const delta = aimPoint(new V3()).sub(from), T = Math.max(0.12, delta.length() / mod.throwSpeed);
-  const base = new V3(delta.x / T, delta.y / T + 0.5 * G * T, delta.z / T);
-  for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(ballGeo, ballMat);
-    m.castShadow = true; m.scale.setScalar(r / BALL_R);
-    m.position.copy(from);
-    scene.add(m);
-    // Split Shot: extra balls fan out about 6° apart
-    const vel = base.clone().applyAxisAngle(UP, (i - (n - 1) / 2) * 0.1);
-    balls.push({ mesh: m, r, vel, age: 0, rest: 0, leafy: false, rico: rank.rico, last: null, lastAge: 0 });
-    if (balls.length > MAX_BALLS) scene.remove(balls.shift().mesh);
-  }
-  deer.throwT = 1; // start the arm animation (deer.js)
-  stats.throws++; sfx.throw();
+/**
+ * Velocity that carries a projectile from `from` to `to`, arriving after flying
+ * at roughly `speed`: fly the distance in time T, plus just enough upward speed
+ * that gravity (scaled by `grav`) brings it down exactly on the target.
+ */
+function arcTo(from, to, speed, grav = 1) {
+  const d = tmp.copy(to).sub(from), T = Math.max(0.12, d.length() / speed);
+  return new V3(d.x / T, d.y / T + 0.5 * G * grav * T, d.z / T);
 }
 
-/** Ball `b` touched creature `e`; `off` points from the creature's capsule to the ball. */
+/** Where thrown things leave the deer: 0.3 m right, 0.2 m forward, 1.85 m up (the right hand). */
+function handPos() {
+  const f = deer.facing;
+  return new V3(player.pos.x + Math.cos(f) * 0.3 - Math.sin(f) * 0.2, player.pos.y + 1.85, player.pos.z - Math.sin(f) * 0.3 - Math.cos(f) * 0.2);
+}
+
+/** Launch a projectile. `o` holds mesh, r, vel and the options described at the top. */
+function launch(o) {
+  const b = Object.assign({ age: 0, rest: 0, dead: false, leafy: false, wet: false, last: null, lastAge: 0, pierce: 0, rico: 0, grav: 1, roll: false }, o);
+  b.mesh.castShadow = true;
+  scene.add(b.mesh);
+  balls.push(b);
+  if (balls.length > MAX_BALLS) scene.remove(balls.shift().mesh);
+  return b;
+}
+
+/** Remove a projectile at the end of this step (and set off its burst, if it has one). */
+function endBall(b) {
+  if (b.dead) return;
+  b.dead = true;
+  if (b.burst) b.burst(b.mesh.position.clone());
+}
+
+/** Projectile `b` touched creature `e`; `off` points from the creature's capsule to it. */
 function ballHitsFoe(b, e, off) {
   const v = b.vel, p = b.mesh.position;
   const d = off.length() || 1e-4;
-  const push = tmp.set(v.x, 0, v.z).normalize().multiplyScalar(7).clone(); // knockback along the ball's path
+  const push = tmp.set(v.x, 0, v.z).normalize().multiplyScalar(b.burst ? 2 : 7).clone(); // knockback along its path
   const at = centerOf(e, new V3());
-  b.last = e; b.lastAge = b.age; // so the same ball can't hit the same creature twice in a row
-  const dmg = mod.damage;
-  hitFoe(e, dmg, push);
+  b.last = e; b.lastAge = b.age; // so the same projectile can't hit the same creature twice in a row
+  if (b.burst) return endBall(b); // bursting projectiles do their damage in the burst
 
-  // Pinecone Burst: half damage to every other creature in the splash radius
-  if (mod.blastR) {
-    ring(at, mod.blastR);
+  const dmg = b.dmg * (b.dmgVs ? b.dmgVs(e) : 1);
+  hitFoe(e, dmg, push);
+  if (b.onHit) b.onHit(e, at);
+
+  // Pinecone Charm item: a share of the damage splashes onto everything nearby
+  if (mod.splash) {
     for (const o of foes) {
       if (o === e || o.state !== 'alive') continue;
       const oc = centerOf(o, new V3());
-      if (oc.distanceTo(at) < mod.blastR + o.def.r) hitFoe(o, dmg * 0.5, oc.sub(at).setY(0).normalize().multiplyScalar(4));
+      if (oc.distanceTo(at) < 2.5 + o.def.r) hitFoe(o, dmg * mod.splash, oc.sub(at).setY(0).normalize().multiplyScalar(3), true);
     }
+    ring(at, 2.5);
   }
 
-  // Bounce off the creature, losing some speed...
-  const n = tmp.copy(off).divideScalar(d), vn = v.dot(n);
-  if (vn < 0) v.addScaledVector(n, -1.35 * vn);
-  v.multiplyScalar(0.6);
-  // ...or, with Ricochet, fly on to the nearest other creature within 15 m.
+  // Pierce: keep flying straight through
+  if (b.pierce > 0) { b.pierce--; return; }
+
+  // Ricochet: fly on to the nearest other creature within 15 m
   if (b.rico > 0) {
     let next = null, bestD = 15;
     for (const o of foes) {
@@ -72,24 +92,40 @@ function ballHitsFoe(b, e, off) {
     }
     if (next) {
       b.rico--;
-      const aim = centerOf(next, new V3()).sub(p);
-      const flatD = Math.hypot(aim.x, aim.z), T = Math.max(0.15, flatD / 16); // same arc math as throwBall, at 16 m/s
-      v.set(aim.x / T, aim.y / T + 0.5 * G * T, aim.z / T);
+      v.copy(arcTo(p, centerOf(next, new V3()), 16, b.grav));
       sfx.rico();
+      return;
     }
   }
+
+  // Otherwise: a ball bounces off, losing speed; anything else stops here
+  if (!b.roll) return endBall(b);
+  const n = tmp.copy(off).divideScalar(d), vn = v.dot(n);
+  if (vn < 0) v.addScaledVector(n, -1.35 * vn);
+  v.multiplyScalar(0.6);
 }
 
-/** Advance one ball by dt seconds (called 3 times per frame for accuracy at high speed). */
+/** Advance one projectile by dt seconds (called 3 times per frame for accuracy at high speed). */
 function stepBall(b, dt) {
   const p = b.mesh.position, v = b.vel, r = b.r;
-  v.y -= G * dt;
+  v.y -= G * b.grav * dt;
   p.addScaledVector(v, dt);
+  if (b.spin) b.mesh.rotation.x += dt * b.spin; // tumbling hives and cones
 
-  // --- Ground: bounce (losing some energy), then roll and slow down ---
+  // --- Water: a splash on the way in, then heavy drag so a ball sinks to the lake bed ---
+  const L = lakeAt(p.x, p.z), wet = !!L && p.y < L.level;
+  if (wet && !b.wet) {
+    ring(p, 0.6 + Math.min(1, v.length() * 0.05), 0xdff3ff); splash(Math.min(0.3, v.length() * 0.02));
+    if (!b.roll) { p.y = L.level; return endBall(b); } // everything else bursts or stops at the surface
+  }
+  if (wet) v.multiplyScalar(Math.pow(0.04, dt));
+  b.wet = wet;
+
+  // --- Ground: a ball bounces (losing some energy), then rolls and slows down ---
   const gy = h(p.x, p.z);
   if (p.y - r < gy) {
     p.y = gy + r;
+    if (!b.roll) return endBall(b);
     normalAt(p.x, p.z, nrm);
     const vn = v.dot(nrm); // speed into the ground
     if (vn < 0) {
@@ -111,6 +147,7 @@ function stepBall(b, dt) {
     if (p.y < t.y + t.th) {
       const rr = t.r + r, d2 = dx * dx + dz * dz;
       if (d2 < rr * rr) {
+        if (!b.roll) return endBall(b);
         const d = Math.sqrt(d2) || 1e-4;
         nrm.set(dx / d, 0, dz / d);
         p.x = t.x + nrm.x * rr; p.z = t.z + nrm.z * rr;
@@ -122,7 +159,7 @@ function stepBall(b, dt) {
   }
   if (leafy) {
     if (!b.leafy && v.length() > 4) rustle(Math.min(0.2, v.length() * 0.01)); // rustle on entering the leaves
-    v.multiplyScalar(Math.pow(0.03, dt));
+    v.multiplyScalar(Math.pow(b.roll ? 0.03 : 0.3, dt)); // small, fast things punch through leaves more easily
   }
   b.leafy = leafy;
 
@@ -132,6 +169,7 @@ function stepBall(b, dt) {
     tmp.set(p.x - k.x, p.y - k.y, p.z - k.z);
     const d2 = tmp.lengthSq();
     if (d2 < rr * rr) {
+      if (!b.roll) return endBall(b);
       const d = Math.sqrt(d2) || 1e-4;
       nrm.copy(tmp).divideScalar(d);
       p.set(k.x, k.y, k.z).addScaledVector(nrm, rr);
@@ -146,16 +184,16 @@ function stepBall(b, dt) {
     if (e.state === 'dying') continue;
     if (e === b.last && b.age - b.lastAge < 0.3) continue;
     const off = capsuleOffset(e, p, tmp2), rr = e.def.r + r;
-    if (off.lengthSq() < rr * rr) ballHitsFoe(b, e, off.clone());
+    if (off.lengthSq() < rr * rr) { ballHitsFoe(b, e, off.clone()); if (b.dead) return; }
   }
 }
 
-/** Advance every ball, and clear out old or lost ones. Called every frame while playing. */
+/** Advance every projectile, and clear out finished, old or lost ones. Called every frame while playing. */
 function stepBalls(dt) {
   for (let i = balls.length - 1; i >= 0; i--) {
     const b = balls[i];
     b.age += dt;
-    for (let s = 0; s < 3; s++) stepBall(b, dt / 3);
-    if (b.rest > 8 || b.age > 30 || b.mesh.position.y < -20) { scene.remove(b.mesh); balls.splice(i, 1); }
+    for (let s = 0; s < 3 && !b.dead; s++) stepBall(b, dt / 3);
+    if (b.dead || b.rest > 8 || b.age > (b.roll ? 30 : 4) || b.mesh.position.y < -20) { scene.remove(b.mesh); balls.splice(i, 1); }
   }
 }

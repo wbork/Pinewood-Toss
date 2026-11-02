@@ -21,14 +21,15 @@ function burst(at, color, n = 12) {
 }
 
 // ---------- Splash rings ----------
-// A flat ring on the ground that grows to `radius` and fades in 0.35 s.
+// A flat ring on the ground (or water) that grows to `radius` and fades in 0.35 s.
+// Pale gold for a Pinecone Burst; pale blue for splashes in a lake.
 const rings = [];
 const ringGeo = new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2);
 
 /** Show a splash ring of `radius` meters centered under point `at`. */
-function ring(at, radius) {
-  const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.8, depthWrite: false }));
-  m.position.set(at.x, h(at.x, at.z) + 0.08, at.z);
+function ring(at, radius, color = 0xffe2a0) {
+  const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false }));
+  m.position.set(at.x, surfH(at.x, at.z) + 0.08, at.z);
   scene.add(m);
   rings.push({ m, radius, t: 0 });
 }
@@ -40,7 +41,7 @@ function stepEffects(dt) {
     c.life -= dt; c.vel.y -= G * dt;
     c.m.position.addScaledVector(c.vel, dt);
     c.m.rotation.x += dt * 8; c.m.rotation.y += dt * 5;
-    const gy = h(c.m.position.x, c.m.position.z) + 0.03;
+    const gy = surfH(c.m.position.x, c.m.position.z) + 0.03; // chips float on water
     if (c.m.position.y < gy) { c.m.position.y = gy; c.vel.multiplyScalar(0.3); c.vel.y = 0; } // land and skid
     if (c.life < 0.3) c.m.scale.setScalar(Math.max(0.001, c.life / 0.3));                       // shrink away
     if (c.life <= 0) { scene.remove(c.m); chips.splice(i, 1); }

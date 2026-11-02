@@ -17,12 +17,13 @@ const shadowy = m => { m.castShadow = true; m.receiveShadow = true; scene.add(m)
 
 // ---------- Ground ----------
 // A big flat grid bent to match h(x, z), colored per vertex: grass in the arena,
-// blending to rock on the ridges and snow on the highest parts.
+// sand and mud around the lakes, rock on the ridges and snow on the highest parts.
 {
-  const g = new THREE.PlaneGeometry(380, 380, 190, 190); // 2 m between vertices
+  const g = new THREE.PlaneGeometry(480, 480, 240, 240); // 2 m between vertices
   g.rotateX(-Math.PI / 2);                                // lay it flat
   const p = g.attributes.position, cols = [];
   const a = new THREE.Color(0x587f35), b = new THREE.Color(0x7b9b44), dirt = new THREE.Color(0x6e5a3b);
+  const sand = new THREE.Color(0xa4925f), mud = new THREE.Color(0x4a4a33);
   const rockA = new THREE.Color(0x6d675b), rockB = new THREE.Color(0x4f4b44), snow = new THREE.Color(0xe8ece9);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i), y = h(x, z), r = Math.hypot(x, z);
@@ -31,9 +32,13 @@ const shadowy = m => { m.castShadow = true; m.receiveShadow = true; scene.add(m)
     const v = 0.5 + 0.5 * Math.sin(x * 0.31 + Math.cos(z * 0.27) * 2) * Math.cos(z * 0.19);
     const c = a.clone().lerp(b, v);
     if (R() < 0.07) c.lerp(dirt, 0.55);
+    // lakes: a sandy beach just above the water line, dark mud under the water
+    const L = lakeAt(x, z);
+    if (L) c.lerp(y < L.level ? mud : sand, y < L.level ? 0.85 : 1 - smooth(L.level + 0.15, L.level + SHORE + 0.05, y) * 0.7);
     // rock past the foot of the ridge (with a ragged edge), snow up high
     c.lerp(rockA.clone().lerp(rockB, R()), smooth(RIDGE_R + 3, RIDGE_R + 15, r + R() * 4));
-    if (y > 31 + 4 * Math.sin(x * 0.2 + z * 0.13) + R() * 3) c.copy(snow);
+    // snow above the snow line, except on steep faces (snow slides off), which stay bare rock
+    if (y > 31 + 4 * Math.sin(x * 0.2 + z * 0.13) + R() * 3 && (r < RIDGE_R + 10 || normalAt(x, z, nrm).y > 0.45)) c.copy(snow);
     cols.push(c.r, c.g, c.b);
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
@@ -44,23 +49,10 @@ const shadowy = m => { m.castShadow = true; m.receiveShadow = true; scene.add(m)
   scene.add(ground);
 }
 
-// ---------- Far peaks ----------
-// A ring of tall snow-capped cones behind the ridge, for a mountain skyline.
-// Each peak is a grey cone plus a smaller white cone sitting on its top third.
-{
-  const n = 46, rock = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true });
-  const peaks = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0), rock, n);
-  const caps = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: 0xeef1ef, roughness: 0.9, flatShading: true }), n);
-  for (let i = 0; i < n; i++) {
-    const ang = (i / n) * Math.PI * 2 + R() * 0.12, d = rand(140, 175);
-    const x = Math.cos(ang) * d, z = Math.sin(ang) * d, w = rand(22, 38), ht = rand(45, 80), y = h(x, z) - 6;
-    Q.setFromAxisAngle(UP, R() * 6);
-    peaks.setMatrixAt(i, M.compose(P.set(x, y, z), Q, S.set(w, ht, w)));
-    peaks.setColorAt(i, C.setHSL(0.09, 0.06, 0.32 + R() * 0.1));
-    caps.setMatrixAt(i, M.compose(P.set(x, y + ht * 0.64, z), Q, S.set(w * 0.375, ht * 0.36, w * 0.375)));
-  }
-  scene.add(peaks, caps);
-}
+// The mountains behind the ridge are part of the ground above (PEAKS in terrain.js).
+// They replaced a ring of separate cone meshes. Those used 276 numbers from R, so skip
+// the same amount here, or every tree and rock below would move.
+for (let i = 0; i < 276; i++) R();
 
 // ---------- Trees ----------
 // Sizes below are for a tree at scale 1; each tree gets its own scale s.
@@ -69,13 +61,13 @@ const shadowy = m => { m.castShadow = true; m.receiveShadow = true; scene.add(m)
 const PINE = [{ b: 1.2, h: 2.6, r: 1.8 }, { b: 2.4, h: 2.3, r: 1.4 }, { b: 3.5, h: 2.0, r: 1.0 }];
 const CROWN = { c: 3.6, r: 1.7 }; // crown center height and radius
 
-// Scatter up to 400 trees, at least ~3 m apart, keeping the spawn clearing (7 m) open.
+// Scatter up to 680 trees, at least ~3 m apart, keeping the spawn clearing (7 m) and the lakes open.
 // Each entry: position (x, y, z), scale s, kind, trunk radius r, trunk height th, rotation.
 const trees = [];
-for (let tries = 0; trees.length < 400 && tries < 8000; tries++) {
-  const ang = R() * Math.PI * 2, d = Math.sqrt(R()) * 94;
+for (let tries = 0; trees.length < 680 && tries < 14000; tries++) {
+  const ang = R() * Math.PI * 2, d = Math.sqrt(R()) * 124;
   const x = Math.cos(ang) * d, z = Math.sin(ang) * d;
-  if (d < 7) continue;
+  if (d < 7 || lakeAt(x, z)) continue;
   if (trees.some(t => (t.x - x) ** 2 + (t.z - z) ** 2 < 10)) continue;
   const s = rand(0.8, 1.5), kind = R() < 0.25 && d < RIDGE_R ? 'round' : 'pine';
   trees.push({ x, z, y: h(x, z) - 0.1, s, kind, r: 0.28 * s, th: (kind === 'pine' ? 2.2 : 2.9) * s, rot: R() * 6.28 });
@@ -110,32 +102,73 @@ PINE.forEach((k, ti) => {
 }
 
 // ---------- Rocks ----------
-// Up to 70 boulders, never inside a tree; the ones out on the ridges are twice as big.
-// They're sunk 30% into the ground so they look settled.
+// Up to 120 boulders, never inside a tree or out in a lake; the ones on the ridges are
+// twice as big. They're sunk 30% into the ground so they look settled.
+// Each entry: center (x, y, z), size r, plus the shape the deer can stand on (see rockTop):
+// hr = footprint radius, vr = height of the dome above the center, peak = top height.
 const rocks = [];
-for (let tries = 0; rocks.length < 70 && tries < 2000; tries++) {
-  const ang = R() * 6.28, d = rand(6, 98), x = Math.cos(ang) * d, z = Math.sin(ang) * d, r = rand(0.4, 1.3) * (d > RIDGE_R ? 2 : 1);
+for (let tries = 0; rocks.length < 120 && tries < 3000; tries++) {
+  const ang = R() * 6.28, d = rand(6, 128), x = Math.cos(ang) * d, z = Math.sin(ang) * d, r = rand(0.4, 1.3) * (d > RIDGE_R ? 2 : 1);
   if (trees.some(t => (t.x - x) ** 2 + (t.z - z) ** 2 < (r + 1.2) ** 2)) continue;
+  const L = lakeAt(x, z);
+  if (L && Math.hypot(x - L.x, z - L.z) < L.r * 0.85) continue; // shore rocks are fine, rocks in open water aren't
   rocks.push({ x, z, r, y: h(x, z) - r * 0.3 });
 }
 {
   const m = shadowy(new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0),
     addDither(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true })), rocks.length));
   rocks.forEach((k, i) => {
-    // random tumble and squash so no two rocks look alike
-    m.setMatrixAt(i, M.compose(P.set(k.x, k.y, k.z), Q.setFromEuler(new THREE.Euler(R(), R() * 6, R())), S.set(k.r * rand(1, 1.3), k.r * rand(0.75, 0.95), k.r * rand(1, 1.25))));
+    // random squash, a spin, and only a slight tilt, so the squashed side stays roughly upright
+    // and the rock's shape matches the dome the deer stands on
+    const sx = rand(1, 1.3), sy = rand(0.75, 0.95), sz = rand(1, 1.25);
+    m.setMatrixAt(i, M.compose(P.set(k.x, k.y, k.z), Q.setFromEuler(new THREE.Euler((R() - 0.5) * 0.3, R() * 6, (R() - 0.5) * 0.3)), S.set(k.r * sx, k.r * sy, k.r * sz)));
     m.setColorAt(i, C.setHSL(0.25, 0.06, 0.42 + R() * 0.12));
+    // 0.9: between the dodecahedron's inner and outer radius
+    k.hr = k.r * 0.9 * Math.min(sx, sz); k.vr = k.r * 0.9 * sy; k.peak = k.y + k.vr;
   });
+}
+
+/** Height of rock k's upper surface at (x, z), or -Infinity if (x, z) is outside its footprint. */
+function rockTop(k, x, z) {
+  const q = ((x - k.x) ** 2 + (z - k.z) ** 2) / (k.hr * k.hr);
+  return q < 1 ? k.y + k.vr * Math.sqrt(1 - q) : -Infinity;
 }
 
 // ---------- Bushes ----------
 // Purely decorative: nothing collides with them.
 {
-  const n = 160, m = shadowy(new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.7, 0), leafMat, n));
+  const n = 280, m = shadowy(new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.7, 0), leafMat, n));
   for (let i = 0; i < n; i++) {
-    const ang = R() * 6.28, d = rand(4, 80), x = Math.cos(ang) * d, z = Math.sin(ang) * d, s = rand(0.5, 1.2);
+    const ang = R() * 6.28, d = rand(4, 106), x = Math.cos(ang) * d, z = Math.sin(ang) * d, s = rand(0.5, 1.2);
+    const L = lakeAt(x, z);
+    if (L && Math.hypot(x - L.x, z - L.z) < L.r * 0.9) { m.setMatrixAt(i, M.makeScale(0, 0, 0)); continue; } // none in the water: hide this one
     m.setMatrixAt(i, M.compose(P.set(x, h(x, z) + 0.25 * s, z), Q.setFromAxisAngle(UP, R() * 6), S.set(s * 1.3, s * 0.8, s * 1.2)));
     m.setColorAt(i, C.setHSL(0.27 + R() * 0.05, 0.45, 0.24 + R() * 0.08));
+  }
+}
+
+// ---------- Lakes ----------
+// A flat, see-through disc at each lake's water level (terrain.js carves the bowl).
+// The disc reaches a little past the water line; the sandy shore covers the rest.
+// A few lily pads float on top. Uses its own random generator so it doesn't
+// disturb the forest layout above.
+const waterMat = new THREE.MeshStandardMaterial({ color: 0x3f7684, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.78 });
+{
+  const r3 = mulberry(77);
+  const padMat = new THREE.MeshStandardMaterial({ color: 0x4f8a3a, roughness: 0.8, flatShading: true });
+  const padGeo = new THREE.CylinderGeometry(1, 1, 0.04, 9, 1, false, 0.5, Math.PI * 1.8); // a disc with a notch cut out
+  for (const L of LAKES) {
+    const water = new THREE.Mesh(new THREE.CircleGeometry(L.r * 0.92, 48).rotateX(-Math.PI / 2), waterMat);
+    water.position.set(L.x, L.level, L.z);
+    water.receiveShadow = true;
+    scene.add(water);
+    for (let i = 0; i < 7; i++) {
+      const a = r3() * 6.28, d = (0.15 + r3() * 0.5) * L.r, s = 0.35 + r3() * 0.35;
+      const pad = new THREE.Mesh(padGeo, padMat);
+      pad.position.set(L.x + Math.cos(a) * d, L.level + 0.03, L.z + Math.sin(a) * d);
+      pad.scale.set(s, 1, s); pad.rotation.y = r3() * 6.28;
+      scene.add(pad);
+    }
   }
 }
 

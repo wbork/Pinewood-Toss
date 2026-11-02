@@ -41,6 +41,7 @@ const MAT = {
   heart: std({ color: 0xe0384a, emissive: 0x5a0710, roughness: 0.4 }), // health pickup
   magnet: std({ color: 0xc8392b, roughness: 0.5 }),                      // XP magnet body
   steel: std({ color: 0xd8dde0, roughness: 0.3, metalness: 0.7 }),       // XP magnet tips
+  mushStem: std({ color: 0xe8dcc0 }),                                    // spore puffer stem
 };
 
 // Creature eyes use "basic" materials, which ignore lighting, so they look like they glow.
@@ -49,6 +50,7 @@ const EYE = {
   red: new THREE.MeshBasicMaterial({ color: 0xff4a2a }),    // hollow stump
   pale: new THREE.MeshBasicMaterial({ color: 0xf0e2ff }),   // gloom wisp
   orange: new THREE.MeshBasicMaterial({ color: 0xff8a1c }), // mossback
+  lime: new THREE.MeshBasicMaterial({ color: 0xb8ff5a }),   // spore puffer, sap shaman
 };
 
 /** Make a mesh at (x, y, z) with shadows on. The building block for every model. */
