@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Pinewood Toss</title>
+  <title>Pinewood</title>
   <!-- Fonts: Patua One for sign lettering, Atkinson Hyperlegible for body text.
        Without internet the game still runs and falls back to system fonts. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,9 +48,11 @@
   <div id="prompt" hidden></div>
   <div id="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · click or hold to fire · <kbd>E</kbd> chest · <kbd>Esc</kbd> pause</div>
 
-  <!-- Title screen (js/game.js). The forest shows behind it while the camera slowly circles the deer. -->
+  <!-- Title screen (js/game.js). Three columns: the logo and menu on the left, the ranger
+       in the clear middle (the camera frames it there), and the best runs on the right. -->
   <div id="title" class="screen">
-    <div class="title-wrap">
+    <div class="title-layout">
+     <div class="title-left">
       <header class="logo">
         <!-- a pine tree on a little wooden sign -->
         <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true">
@@ -60,20 +62,22 @@
           <rect x="29" y="50" width="6" height="6" fill="#c4b087"/>
         </svg>
         <div class="lbl eyebrow">Pinewood State Forest · after dark</div>
-        <h1 class="logo-text"><span>Pinewood</span><span>Toss</span></h1>
+        <h1 class="logo-text"><span>Pinewood</span></h1>
         <p class="tagline">One deer ranger. A good arm. A forest that wants you gone.</p>
       </header>
-      <div class="title-grid">
-        <section class="sign panel">
-          <!-- Pick the weapon each run starts with (js/weapons.js fills it). -->
-          <div class="start-pick" id="start-pick"></div>
-          <button id="go" class="go big" type="button">Enter the forest</button>
-          <button id="howto-open" class="link" type="button">How to play</button>
-        </section>
-        <!-- Your best runs (filled by js/besttimes.js). -->
-        <section class="times sign panel" id="times-title"></section>
-      </div>
+      <section class="sign panel">
+        <!-- Pick the weapon each run starts with (js/weapons.js fills it). -->
+        <div class="start-pick" id="start-pick"></div>
+        <button id="go" class="go big" type="button">Enter the forest</button>
+        <button id="howto-open" class="link" type="button">How to play</button>
+      </section>
+     </div>
+     <div class="title-center" aria-hidden="true"></div>
+     <div class="title-right">
+      <!-- Your best runs (filled by js/besttimes.js). -->
+      <section class="times sign panel" id="times-title"></section>
       <div class="title-foot">Survive the Thorn Queen at 5:00 and the Hollow King at 10:00, then score as long as you can. Needs a keyboard and mouse.</div>
+     </div>
     </div>
   </div>
 
@@ -111,6 +115,11 @@
       <div class="lbl eyebrow">Paused</div>
       <h1>Catch your breath</h1>
       <p id="blurb"></p>
+      <!-- Items you hold; hover one to see what it adds (js/hud.js → renderPauseItems). -->
+      <div class="pause-items-wrap">
+        <div class="lbl">Your items <span class="hint-small">hover for details</span></div>
+        <div id="pause-items"></div>
+      </div>
       <button id="resume" class="go" type="button">Back to the woods</button>
       <button id="quit" class="link" type="button">Quit to title</button>
     </div>
@@ -162,10 +171,24 @@
   <script src="js/hazards.js"></script>   <!-- creature bolts, poison clouds, ground eruptions, shockwaves -->
   <script src="js/creatures.js"></script> <!-- each creature's stats, looks, and special ability -->
   <script src="js/enemies.js"></script>   <!-- spawning, chasing, attacking, taking damage -->
+  <script src="js/models/ranger.js"></script> <!-- the ranger model made in Blender (blender/ranger.blend) -->
+  <script src="js/models/props.js"></script>  <!-- hearts, magnets, XP gems, coins made in Blender (blender/props.blend) -->
+  <!-- every creature and boss, made in Blender (blender/build_creatures.py → blender/<id>.blend) -->
+  <script src="js/models/imp.js"></script>
+  <script src="js/models/wisp.js"></script>
+  <script src="js/models/stump.js"></script>
+  <script src="js/models/mossback.js"></script>
+  <script src="js/models/puffer.js"></script>
+  <script src="js/models/stalker.js"></script>
+  <script src="js/models/shaman.js"></script>
+  <script src="js/models/thornqueen.js"></script>
+  <script src="js/models/hollowking.js"></script>
+  <script src="js/cult.js"></script>      <!-- the Hollow King cult's altars, stones, totems, effigies and sigils (laid out by world.js) -->
   <script src="js/deer.js"></script>      <!-- the player's deer ranger model and animation -->
   <script src="js/camera.js"></script>    <!-- over-the-shoulder camera and crosshair aiming -->
   <script src="js/combat.js"></script>    <!-- launching projectiles and their physics -->
   <script src="js/weapons.js"></script>   <!-- the eight weapons, their upgrades and synergies -->
+  <script src="js/gear.js"></script>      <!-- each weapon's (and fusion's) model, worn by the ranger -->
   <script src="js/levelup.js"></script>   <!-- XP, leveling, the level-up menu -->
   <script src="js/chests.js"></script>    <!-- chests that hold stat items -->
   <script src="js/bosses.js"></script>    <!-- the 5:00 and 10:00 bosses, health bar, banner -->

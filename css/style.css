@@ -1,5 +1,5 @@
 /* =========================================================================
-   Pinewood Toss — styles for everything drawn on top of the 3D canvas.
+   Pinewood — styles for everything drawn on top of the 3D canvas.
    The look is routed-wood park signage: dark bark panels, cream lettering,
    a thin inset cream border. The game itself is a single full-screen canvas.
    ========================================================================= */
@@ -141,6 +141,8 @@ kbd {
 #bossfill { width: 100%; background: linear-gradient(90deg, #6a1f6a, #c0408a); transition: width .15s ease-out; }
 #bossbar.rage #bossfill { background: linear-gradient(90deg, var(--hp-lo), #ff6a3a); }  /* below half health: enraged */
 #bossbar.rage #bossname::after { content: " · enraged"; color: var(--danger); }
+#bossbar.immune #bossname::after { content: " · roaring (immune)"; color: #ffb43a; }
+#bossbar.immune #bossfill { background: linear-gradient(90deg, #8a6a2a, #ffb43a); }
 #banner {
   position: fixed; left: 50%; top: 28%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;
   text-shadow: 0 3px 0 var(--ink), 0 0 24px rgba(0,0,0,.7);
@@ -203,6 +205,34 @@ kbd {
 }
 .board { width: 100%; max-width: 430px; padding: 24px 26px 22px; display: grid; gap: 16px; cursor: default; }
 .board.wide { max-width: 760px; }
+
+/* ---------- Pause screen: your items, with a hover card for each ---------- */
+.pause-items-wrap { display: grid; gap: 8px; }
+.pause-items-wrap .hint-small { margin-left: 8px; font-family: var(--f-body); letter-spacing: 0; text-transform: none; color: var(--cream-dim); opacity: 0.8; }
+#pause-items { display: flex; flex-wrap: wrap; gap: 6px; }
+#pause-items .none { font-size: 14px; color: var(--cream-dim); }
+.item-chip {
+  position: relative; padding: 5px 10px; border-radius: 6px; cursor: help;
+  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(196, 176, 135, 0.35);
+  font: 700 13px var(--f-body); color: var(--cream);
+}
+.item-chip b { color: var(--cream-dim); font-weight: 700; }
+.item-chip.uncommon { color: var(--uncommon); } .item-chip.rare { color: var(--rare); } .item-chip.legendary { color: var(--gold); }
+.item-chip:hover, .item-chip:focus-visible { border-color: currentColor; background: rgba(0, 0, 0, 0.45); outline: none; }
+/* the card: hidden until the chip is hovered or focused */
+.item-chip .tip {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); z-index: 5;
+  width: 250px; padding: 10px 12px; display: none; gap: 5px; text-align: left; pointer-events: none;
+  background: var(--bark); border: 2px solid var(--ink); border-radius: 8px;
+  box-shadow: inset 0 0 0 2px var(--bark), inset 0 0 0 3px var(--cream-dim), 0 6px 18px rgba(0, 0, 0, 0.5);
+  font: 400 13px/1.35 var(--f-body); color: var(--cream);
+}
+.item-chip:hover .tip, .item-chip:focus-visible .tip { display: grid; }
+.tip-name { font: 400 16px var(--f-sign); letter-spacing: 0.03em; }
+.tip-name.common { color: var(--cream); } .tip-name.uncommon { color: var(--uncommon); } .tip-name.rare { color: var(--rare); } .tip-name.legendary { color: var(--gold); }
+.tip-rarity { font-size: 12px; color: var(--cream-dim); margin-top: -3px; }
+.tip-row { display: grid; grid-template-columns: 84px 1fr; gap: 6px; }
+.tip-row i { font-style: normal; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--moss); padding-top: 2px; }
 /* quiet text buttons: "How to play", "Quit to title", "Title screen" */
 .link {
   justify-self: start; border: 0; padding: 4px 0; background: none; cursor: pointer;
@@ -216,8 +246,21 @@ body.on-title #hud, body.on-title #vitals, body.on-title #hint, body.on-title .r
 body.on-title #bossbar, body.on-title #prompt { display: none; }
 
 /* ---------- Title screen ---------- */
-#title { background: radial-gradient(ellipse at 50% 35%, rgba(14,22,15,0) 20%, rgba(14,22,15,.78) 100%); align-content: center; }
-.title-wrap { width: min(960px, 100%); display: grid; gap: 22px; justify-items: center; }
+/* Three columns: logo + menu | the ranger, framed by the title camera (game.js → titleCamera) | best runs.
+   The backdrop darkens only the sides so the middle stays clear. */
+#title {
+  place-items: stretch; padding: 24px 28px;
+  background: linear-gradient(90deg, rgba(14,22,15,.82) 0%, rgba(14,22,15,.35) 30%, rgba(14,22,15,0) 40%, rgba(14,22,15,0) 62%, rgba(14,22,15,.35) 72%, rgba(14,22,15,.8) 100%);
+}
+.title-layout { display: grid; grid-template-columns: minmax(300px, 400px) minmax(200px, 1fr) minmax(260px, 330px); gap: 24px; align-items: center; min-height: 100%; }
+.title-left, .title-right { display: grid; gap: 18px; align-content: center; }
+.title-left .logo { justify-items: start; text-align: left; }
+.title-left .logo-text { font-size: clamp(48px, 5.6vw, 88px); }
+@media (max-width: 900px) { /* narrow window: stack the columns (the ranger is behind them) */
+  .title-layout { grid-template-columns: 1fr; }
+  .title-center { display: none; }
+  .title-left .logo { justify-items: center; text-align: center; }
+}
 .logo { display: grid; justify-items: center; gap: 6px; text-align: center; animation: drift 6s ease-in-out infinite; }
 @keyframes drift { 50% { transform: translateY(-5px); } }
 .logo-mark { width: 64px; height: 64px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
@@ -230,12 +273,10 @@ body.on-title #bossbar, body.on-title #prompt { display: none; }
 }
 .logo-text span { display: block; }
 .logo-text span + span { color: #f2c14e; font-size: .8em; }
-.tagline { margin: 22px 0 0; font-size: 17px; color: var(--cream); text-shadow: 0 2px 6px rgba(0,0,0,.9); }
-.title-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; width: 100%; align-items: start; }
+.tagline { margin: 18px 0 0; max-width: 32ch; font-size: 17px; color: var(--cream); text-shadow: 0 2px 6px rgba(0,0,0,.9); }
 .panel { padding: 18px 18px 16px; display: grid; gap: 14px; }
 .go.big { justify-self: stretch; font-size: 22px; padding: 14px 20px; }
-.title-foot { font-size: 13px; color: var(--cream); opacity: .85; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,.9); }
-@media (max-width: 760px) { .title-grid { grid-template-columns: 1fr; } }
+.title-foot { font-size: 13px; color: var(--cream); opacity: .85; text-shadow: 0 2px 4px rgba(0,0,0,.9); }
 /* how to play */
 .howto-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; }
 .tips { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; line-height: 1.45; color: var(--cream-dim); }

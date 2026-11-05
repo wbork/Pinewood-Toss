@@ -70,6 +70,7 @@ const sfx = {
   swell: () => tone(150, 420, 0.9, 'sine', 0.06),                         // a spore puffer swells up
   shaman: () => tone(330, 495, 0.4, 'triangle', 0.05),                    // a shaman's heal
   bossIntro: () => { tone(80, 40, 2.2, 'sawtooth', 0.14); [196, 185, 147].forEach((f, i) => tone(f, f * 0.98, 0.6, 'square', 0.05, 0.4 + i * 0.45)); },
+  bossRoar: () => { tone(120, 55, 1.6, 'sawtooth', 0.16); tone(90, 40, 2.0, 'square', 0.07, 0.1); tone(240, 110, 1.2, 'sawtooth', 0.05, 0.05); splash(0.35); }, // enrage
   bossDown: () => [262, 330, 392, 523, 659, 784].forEach((f, i) => tone(f, f, 0.3, 'triangle', 0.12, i * 0.1)),
   coin: () => tone(1320, 1760, 0.06, 'square', 0.025),
   fusion: () => [392, 494, 587, 784, 988, 1175].forEach((f, i) => tone(f, f * 1.01, 0.22, 'triangle', 0.1, i * 0.07)),

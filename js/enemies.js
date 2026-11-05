@@ -115,6 +115,10 @@ function capsuleOffset(e, p, out) {
  */
 function hitFoe(e, dmg, push, quiet) {
   if (e.state === 'dying') return;
+  if (e.immune) { // a roaring boss (bosses.js) takes no damage; say so now and then
+    if (!quiet && !(e.immunePop > runTime)) { e.immunePop = runTime + 0.4; pop(centerOf(e, new V3()).add(nrm.set(0, 1 + e.def.r, 0)), 'Immune', '', 'small shielded'); }
+    return;
+  }
   let crit = false;
   if (!quiet && mod.crit && Math.random() < mod.crit) { dmg *= 3; crit = true; }
   if (warded(e)) dmg *= 0.5; // a nearby Hollow stump's bark ward halves the damage
@@ -298,6 +302,8 @@ function stepFoe(e, dt, now) {
     e.flash = Math.max(0, e.flash - dt * 6);
     for (const m of e.flashMats) m.emissive.setRGB(e.flash, e.flash * 0.55, e.flash * 0.45);
   }
+  // how much it's walking (0 standing still → 1 at full speed): animations blend walk ↔ idle by it
+  e.mv = damp(e.mv || 0, Math.min(1, Math.hypot(e.vel.x, e.vel.z) / Math.max(0.5, e.speed)), 6, dt);
   e.def.animate(e, dt, now);
   return true;
 }

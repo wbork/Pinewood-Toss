@@ -31,6 +31,7 @@ function showPause() {
   $('pause').hidden = false;
   $('blurb').textContent = 'Paused at ' + clockText(runTime) + ', level ' + prog.level + '. ' + stats.kills + (stats.kills === 1 ? ' creature' : ' creatures') + ' down so far' +
     (endless ? ', ' + score.toLocaleString() + ' points.' : '.');
+  renderPauseItems(); // hud.js: your items, with hover details
   releaseInput();
 }
 
@@ -38,7 +39,7 @@ function showPause() {
 function start() {
   initAudio();
   if (ac && ac.state === 'suspended') ac.resume();
-  if (!started) resetRun(); // the title-screen creatures are just for show; the run starts empty
+  if (!started) { newMap(); resetRun(); } // a fresh random map for the run (the title has its own); the run starts empty
   started = playing = true;
   showTitle(false); $('pause').hidden = true;
   lockPointer();
@@ -50,6 +51,7 @@ function quitToTitle() {
   $('pause').hidden = true; $('over').hidden = true;
   dead = false; playing = false;
   if (locked) document.exitPointerLock();
+  newMap(TITLE_SEED, true); // back to the title screen's own forest
   resetRun();
   started = false;
   titleShowcase();
@@ -80,7 +82,10 @@ function gameOver() {
   hud();
 }
 
-/** Clear the world and put every run value back to its starting point. */
+/**
+ * Clear the world and put every run value back to its starting point. (The map itself is
+ * changed by newMap: every run gets a fresh random one, and the title screen has its own.)
+ */
 function resetRun() {
   // remove everything the last run left in the world
   for (const e of foes) scene.remove(e.group);
@@ -116,6 +121,7 @@ function resetRun() {
 $('again').addEventListener('click', () => {
   $('over').hidden = true;
   dead = false;
+  newMap();             // a fresh random map for the new run
   resetRun();
   start();
 });
@@ -173,18 +179,51 @@ function look(dx, dy) {
 
 // ---------- Title screen ----------
 /**
- * The opening shot behind the title screen: a few creatures in the clearing with the
- * Thorn Queen looming at the back, and the camera circling the deer. They're removed
- * when the run starts.
+ * The title screen: a fixed scene on the title map's stage (terrain.js → STAGE). The ranger
+ * stands in the middle facing the camera, and EVERY monster stands behind him idling, so you
+ * can see them all: the smaller creatures in a loose arc, the two bosses towering at the back.
+ * Each entry: creature id, x, z (behind the deer is +z), and which way it looks (radians;
+ * 0 = at the camera). The camera looks back across the stage, so on screen +x is LEFT. They're
+ * placed in the open parts of the screen: the middle column between the menus, and the lower
+ * right under the best-runs card (only short creatures fit there: the stump). The Mossback
+ * stands in the clear middle ground in front of the Thorn Queen. They're removed when a run
+ * starts.
  */
+// [id, x, z, turn, lift]: where each stands (screen-right is world −x), how far it turns from facing
+// the camera, and (fliers) how high it hovers above its usual height. Laid out so every one is clear
+// of the menus and the others at 1280×800: the Hollow King on his sigil before his altar (world.js
+// TITLE_SITE) right behind the ranger, his cult priest (the shaman) beside the altar, the Thorn Queen
+// back right; the wisp hovering in the open sky on the left, the puffer and imp on the left, Mossback
+// right of center, and the stalker and stump creeping up close on the right.
+const TITLE_CAST = [
+  ['hollowking', -1.0, 21, 0.0], ['thornqueen', -9, 25, -0.3], ['shaman', 2.1, 14.5, 0.25],
+  ['wisp', 2.9, 9.5, 0.3, 1.7], ['puffer', 2.9, 6.6, 0.35], ['imp', 1.8, 2.2, 0.3],
+  ['mossback', -4.4, 8.0, -0.3], ['stalker', -1.5, -0.4, 0.3], ['stump', -3.4, -0.9, -0.5],
+];
 function titleShowcase() {
-  [['imp', -2.5, -9], ['puffer', -5.5, -11], ['stump', 1.5, -11], ['wisp', 4.5, -8.5], ['thornqueen', 1, -21]].forEach(([id, x, z]) => {
+  for (const [id, x, z, look, lift] of TITLE_CAST) {
     const e = spawnFoe(id, x, z, true);
-    e.yaw = Math.atan2(-x, -z); e.group.rotation.y = e.yaw;
-  });
-  yaw = 0.35; pitch = 0.05;
+    e.yaw = Math.PI + look; e.group.rotation.y = e.yaw;   // facing back toward the camera
+    if (lift) e.group.position.y += lift;
+    e.mv = 0;                                                // standing still: idle animations
+    if (id === 'stalker') for (const m of e.mats) m.opacity = 1; // (it only fades in when close, in a run)
+  }
+  deer.facing = 0; yaw = 0; pitch = 0.05;
+}
+
+/**
+ * The title screen's camera: fixed, in front of the deer and a little above it, framing it in the
+ * middle of the screen (between the menu columns) with the monsters spread out behind. Looking
+ * slightly down puts the horizon higher, so the monsters at different depths stack up the screen
+ * instead of hiding behind each other.
+ */
+function titleCamera() {
+  const p = player.pos;
+  camera.position.set(p.x + 0.6, p.y + 3.1, p.z - 5.6);
+  camera.lookAt(p.x - 0.6, p.y + 1.4, p.z + 6);
 }
 titleShowcase();
+refreshGear(); // the ranger wears the starting weapon on the title screen too
 showTitle(true);
 
 // ---------- Main loop ----------
@@ -227,10 +266,9 @@ function frame() {
     hideChestLabels();     // no floating chest labels over menus
     updateDeer(dt, false); // keep the deer posed (and let it fall over after death)
     if (!started) {
-      // title screen: the camera slowly circles the deer while the creatures fidget
-      yaw += dt * 0.03;
-      placeCamera(dt);
-      for (const e of foes) e.def.animate(e, dt * 0.4, now);
+      // title screen: a fixed shot of the deer with every monster behind it, idling
+      titleCamera();
+      for (const e of foes) e.def.animate(e, dt, now);
     }
   }
 
@@ -240,6 +278,8 @@ function frame() {
   $('hurt').style.opacity = Math.max(hurtFlash, low);
 
   stepPops(dt);
+  stepGear(dt); // flickering lanterns, buzzing bees on the ranger's gear
+  stepCult(now); // flickering candles and sigils at the cult's sites
 
   // keep the sun's shadow area centered on the deer
   sun.position.copy(player.pos).add(SUN_OFF);

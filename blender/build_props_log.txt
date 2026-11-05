@@ -1,0 +1,13 @@
+running build_props.py
+  prop altar    1656 triangles, 7 materials
+  prop candles   280 triangles, 3 materials
+  prop coin      308 triangles, 2 materials
+  prop effigy   2042 triangles, 7 materials
+  prop gem        60 triangles, 1 materials
+  prop heart     296 triangles, 2 materials
+  prop magnet    128 triangles, 2 materials
+  prop monolith  496 triangles, 2 materials
+  prop sigil     848 triangles, 1 materials
+  prop totem    1064 triangles, 5 materials
+exported props: 10 props → C:\Users\will.bork\OneDrive - JM Murray\Documents\Programs\PinewoodToss\js\models\props.js
+DONE

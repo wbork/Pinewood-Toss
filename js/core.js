@@ -20,8 +20,8 @@ const G = 20;
 
 /**
  * Seeded random number generator (the "mulberry32" algorithm).
- * Unlike Math.random(), the same seed always produces the same sequence,
- * which is how the forest has the same layout on every visit.
+ * Unlike Math.random(), the same seed always produces the same sequence, so a
+ * map's seed (MAP_SEED, terrain.js) always gives the same forest.
  * Returns a function that gives a new number in [0, 1) each call.
  */
 function mulberry(seed) {
@@ -33,9 +33,9 @@ function mulberry(seed) {
   };
 }
 
-// The world's random source. world.js draws from it in a fixed order while it
-// builds the forest; changing that order (or the seed) rearranges the forest.
-const R = mulberry(20261030);
+// The world's random source. world.js reseeds it from each new map's seed (newMap) and
+// draws from it while it builds that map's forest.
+let R = mulberry(20261030);
 
 /** Random number between a and b, from the seeded source. */
 const rand = (a, b) => a + (b - a) * R();

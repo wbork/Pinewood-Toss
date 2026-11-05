@@ -1,0 +1,4 @@
+running build_creatures.py
+exported imp: 15 bones, 6 materials, 1716 vertices, 3140 triangles → C:\Users\will.bork\OneDrive - JM Murray\Documents\Programs\PinewoodToss\js\models\imp.js
+built imp: 23 parts
+DONE

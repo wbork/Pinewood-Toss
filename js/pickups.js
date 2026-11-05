@@ -17,7 +17,7 @@ function dropXP(at, xp) {
   for (let left = xp; left > 0; left -= chunk) {
     const v = Math.min(chunk, left), s = 0.08 + Math.min(v, 6) * 0.025;
     const g = new THREE.Group();
-    const core = new THREE.Mesh(orbGeo, orbMat); core.scale.setScalar(s);
+    const core = propMesh('gem') || new THREE.Mesh(orbGeo, orbMat); core.scale.setScalar(s); core.castShadow = false; // the Blender gem, if loaded
     const halo = new THREE.Sprite(orbGlow); halo.scale.setScalar(s * 6);
     g.add(core, halo); g.position.copy(at);
     scene.add(g);
@@ -41,7 +41,7 @@ function dropCoins(at, value) {
     const v = left >= 25 ? 10 : left >= 8 ? 5 : 1, s = v >= 10 ? 0.2 : v >= 5 ? 0.16 : 0.12; // bigger coins are worth more
     left -= v;
     const g = new THREE.Group();
-    const core = new THREE.Mesh(coinGeo, coinMat); core.scale.setScalar(s);
+    const core = propMesh('coin') || new THREE.Mesh(coinGeo, coinMat); core.scale.setScalar(s); core.castShadow = false; // the Blender coin, if loaded
     const halo = new THREE.Sprite(coinGlow); halo.scale.setScalar(s * 4);
     g.add(core, halo); g.position.copy(at);
     scene.add(g);
@@ -94,15 +94,21 @@ const drops = [];
 /** Drop a 'heart' or 'magnet' at point `at`. */
 function dropItem(kind, at) {
   const g = new THREE.Group();
+  // the models are made in Blender (blender/build_props.py: a puffy heart, a horseshoe magnet);
+  // the simple shapes below are only a fallback if js/models/props.js isn't loaded
+  const model = propMesh(kind);
+  if (model) g.add(model);
   if (kind === 'heart') {
-    // a heart: two balls on top of an upside-down cone
-    for (const x of [-0.11, 0.11]) g.add(mesh(new THREE.SphereGeometry(0.16, 12, 8), MAT.heart, x, 0.08, 0));
-    const tip = mesh(new THREE.ConeGeometry(0.255, 0.36, 12), MAT.heart, 0, -0.13, 0); tip.rotation.x = Math.PI; g.add(tip);
+    if (!model) {
+      for (const x of [-0.11, 0.11]) g.add(mesh(new THREE.SphereGeometry(0.16, 12, 8), MAT.heart, x, 0.08, 0));
+      const tip = mesh(new THREE.ConeGeometry(0.255, 0.36, 12), MAT.heart, 0, -0.13, 0); tip.rotation.x = Math.PI; g.add(tip);
+    }
     const halo = new THREE.Sprite(glow(0xff5a6e)); halo.scale.setScalar(1.3); g.add(halo);
   } else {
-    // a horseshoe magnet: a red half-ring with two steel tips
-    const arc = mesh(new THREE.TorusGeometry(0.2, 0.07, 8, 20, Math.PI), MAT.magnet, 0, 0.06, 0); g.add(arc);
-    for (const x of [-0.2, 0.2]) g.add(mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.14, 10), MAT.steel, x, -0.01, 0));
+    if (!model) {
+      const arc = mesh(new THREE.TorusGeometry(0.2, 0.07, 8, 20, Math.PI), MAT.magnet, 0, 0.06, 0); g.add(arc);
+      for (const x of [-0.2, 0.2]) g.add(mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.14, 10), MAT.steel, x, -0.01, 0));
+    }
     const halo = new THREE.Sprite(glow(0x5aa8ff)); halo.scale.setScalar(1.4); g.add(halo);
   }
   g.position.copy(at);

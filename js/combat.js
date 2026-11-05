@@ -1,6 +1,6 @@
 /* =========================================================================
-   combat.js — everything that's thrown: launching projectiles on an arc,
-   and simulating them as they fly, bounce off the ground, trunks and rocks,
+   combat.js — everything that's thrown: launching projectiles straight at
+   the crosshair, and simulating them as they fly, bounce off the ground, trunks and rocks,
    slow down in leaves, splash into lakes and hit creatures.
 
    The aimed weapons in weapons.js (Pine Ball, Acorn Sling, Beehive, Frost
@@ -10,6 +10,8 @@
    - rico:   after a hit, flies on to the nearest other creature this many times
    - burst:  a function called at the first thing it touches; then it's gone (hive, frost)
    - grav:   how strongly gravity pulls it (1 = normal; acorns fly flatter)
+   - glide:  seconds of straight flight with no gravity first (aimed throws: see aimShot);
+             ends early on touching anything
    Anything that isn't `roll` disappears when it hits the ground.
    ========================================================================= */
 
@@ -33,15 +35,31 @@ function arcTo(from, to, speed, grav = 1) {
   return new V3(d.x / T, d.y / T + 0.5 * G * grav * T, d.z / T);
 }
 
-/** Where thrown things leave the deer: 0.3 m right, 0.2 m forward, 1.85 m up (the right hand). */
+/**
+ * An aimed throw from `from` toward the crosshair point `to` (from aimPoint): it flies
+ * dead straight along that line at `speed`, with no gravity ("glide") until it reaches
+ * the crosshair point, then falls, bounces and rolls normally. So every aimed throw goes
+ * exactly where the crosshair is, however far away that is and however you're moving.
+ * Returns launch options: { vel, glide (seconds) }.
+ */
+function aimShot(from, to, speed) {
+  const d = tmp.copy(to).sub(from), dist = d.length() || 1;
+  return { vel: d.multiplyScalar(speed / dist).clone(), glide: dist / speed };
+}
+
+/**
+ * Where thrown things leave the deer: 0.3 m right, 0.2 m forward, 1.85 m up (the right
+ * hand). Measured from the camera's heading (yaw), not the body's, so throws start from the
+ * same spot relative to the crosshair even while the body is still turning to catch up.
+ */
 function handPos() {
-  const f = deer.facing;
+  const f = yaw;
   return new V3(player.pos.x + Math.cos(f) * 0.3 - Math.sin(f) * 0.2, player.pos.y + 1.85, player.pos.z - Math.sin(f) * 0.3 - Math.cos(f) * 0.2);
 }
 
 /** Launch a projectile. `o` holds mesh, r, vel and the options described at the top. */
 function launch(o) {
-  const b = Object.assign({ age: 0, rest: 0, dead: false, leafy: false, wet: false, last: null, lastAge: 0, pierce: 0, rico: 0, grav: 1, roll: false }, o);
+  const b = Object.assign({ age: 0, rest: 0, dead: false, leafy: false, wet: false, last: null, lastAge: 0, pierce: 0, rico: 0, grav: 1, glide: 0, roll: false }, o);
   b.mesh.castShadow = true;
   scene.add(b.mesh);
   balls.push(b);
@@ -63,6 +81,7 @@ function ballHitsFoe(b, e, off) {
   const push = tmp.set(v.x, 0, v.z).normalize().multiplyScalar(b.burst ? 2 : 7).clone(); // knockback along its path
   const at = centerOf(e, new V3());
   b.last = e; b.lastAge = b.age; // so the same projectile can't hit the same creature twice in a row
+  if (!b.pierce) b.glide = 0;     // from here on gravity applies (a piercing acorn keeps its line)
   if (b.burst) return endBall(b); // bursting projectiles do their damage in the burst
 
   const dmg = b.dmg * (b.dmgVs ? b.dmgVs(e) : 1);
@@ -108,7 +127,8 @@ function ballHitsFoe(b, e, off) {
 /** Advance one projectile by dt seconds (called 3 times per frame for accuracy at high speed). */
 function stepBall(b, dt) {
   const p = b.mesh.position, v = b.vel, r = b.r;
-  v.y -= G * b.grav * dt;
+  if (b.glide > 0) b.glide -= dt;  // still flying straight at the crosshair
+  else v.y -= G * b.grav * dt;
   p.addScaledVector(v, dt);
   if (b.spin) b.mesh.rotation.x += dt * b.spin; // tumbling hives and cones
 
@@ -125,6 +145,7 @@ function stepBall(b, dt) {
   const gy = h(p.x, p.z);
   if (p.y - r < gy) {
     p.y = gy + r;
+    b.glide = 0; // touched down: gravity from now on
     if (!b.roll) return endBall(b);
     normalAt(p.x, p.z, nrm);
     const vn = v.dot(nrm); // speed into the ground
@@ -153,13 +174,16 @@ function stepBall(b, dt) {
         p.x = t.x + nrm.x * rr; p.z = t.z + nrm.z * rr;
         const vn = v.dot(nrm);
         if (vn < 0) { v.addScaledVector(nrm, -1.5 * vn); if (vn < -3) sfx.trunk(); }
+        b.glide = 0;
       }
     }
     if (!leafy && inFoliage(t, p)) leafy = true;
   }
   if (leafy) {
     if (!b.leafy && v.length() > 4) rustle(Math.min(0.2, v.length() * 0.01)); // rustle on entering the leaves
-    v.multiplyScalar(Math.pow(b.roll ? 0.03 : 0.3, dt)); // small, fast things punch through leaves more easily
+    // Leaves slow things down, except an aimed throw still flying to the crosshair (b.glide),
+    // which punches straight through so it always arrives where you aimed.
+    if (b.glide <= 0) v.multiplyScalar(Math.pow(b.roll ? 0.03 : 0.3, dt)); // small, fast things punch through leaves more easily
   }
   b.leafy = leafy;
 
@@ -175,6 +199,7 @@ function stepBall(b, dt) {
       p.set(k.x, k.y, k.z).addScaledVector(nrm, rr);
       const vn = v.dot(nrm);
       if (vn < 0) { v.addScaledVector(nrm, -1.4 * vn); if (vn < -3) sfx.thud(-vn); }
+      b.glide = 0;
     }
   }
 

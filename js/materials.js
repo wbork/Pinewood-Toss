@@ -57,3 +57,41 @@ const EYE = {
 const mesh = (geo, mat, x = 0, y = 0, z = 0) => {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m;
 };
+
+// ---------- Models made in Blender ----------
+/**
+ * A material from a Blender export entry {color, rough, metal, emit}: flat-shaded like
+ * everything else, glowing `emit` of its own color. skinning: for rigged models.
+ */
+function modelMaterial(m, skinning) {
+  const c = new THREE.Color(m.color);
+  return new THREE.MeshStandardMaterial({ color: c, roughness: m.rough, metalness: m.metal, flatShading: true, skinning: !!skinning, emissive: c.clone().multiplyScalar(m.emit || 0) });
+}
+
+/** Geometry (with one group per material) from a Blender export entry. */
+function modelGeometry(d) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(d.position, 3));
+  if (d.skinIndex) {
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(d.skinIndex, 4));
+    geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(d.skinWeight, 4));
+  }
+  geo.setIndex(d.index);
+  geo.computeVertexNormals();
+  for (const g of d.groups) geo.addGroup(g.start, g.count, g.material);
+  return geo;
+}
+
+const PROP_CACHE = {};
+/**
+ * A mesh of prop `name` from the props file (blender/build_props.py → js/models/props.js),
+ * or null if that file isn't loaded. Geometry and materials are shared by every copy.
+ */
+function propMesh(name) {
+  const set = window.PINEWOOD_MODELS && PINEWOOD_MODELS.props;
+  if (!set || !set[name]) return null;
+  const p = PROP_CACHE[name] || (PROP_CACHE[name] = { geo: modelGeometry(set[name]), mats: set[name].materials.map(m => modelMaterial(m)) });
+  const m = new THREE.Mesh(p.geo, p.mats);
+  m.castShadow = true;
+  return m;
+}

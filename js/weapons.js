@@ -112,8 +112,8 @@ const beeGeo = new THREE.SphereGeometry(0.05, 5, 4);
 // ups (what levels 2–8 add), stats(L), and fire() for aimed or step(dt) for auto weapons.
 const WEAPONS = {
   pine: {
-    name: 'Pine Ball', kind: 'aimed', style: 'Aimed · bouncing arcs',
-    text: 'Arcing balls that bounce, roll and keep hitting.',
+    name: 'Pine Ball', kind: 'aimed', style: 'Aimed · bouncing balls',
+    text: 'Balls that fly where you aim, then bounce, roll and keep hitting.',
     ups: ['+1 ball', '+40% damage', 'Bounces on to 1 more creature', '+1 ball and +40% damage',
       '+1 ball', '+50% damage', 'Bounces on to 2 more creatures'],
     stats: L => ({
@@ -121,10 +121,10 @@ const WEAPONS = {
       rico: lvl(L,4) + 2 * lvl(L,8) + mod.rico, cd: 0.3 / mod.haste, speed: 28 * mod.speed, r: BALL_R * mod.area * (fz('avalanche') ? 1.5 : 1),
     }),
     fire(s, target) {
-      const from = handPos(), base = arcTo(from, target, s.speed);
+      const from = handPos(), shot = aimShot(from, target, s.speed);
       for (let i = 0; i < s.n; i++) {
         const m = new THREE.Mesh(ballGeo, ballMat); m.scale.setScalar(s.r / BALL_R); m.position.copy(from);
-        launch({ mesh: m, r: s.r, vel: base.clone().applyAxisAngle(UP, (i - (s.n - 1) / 2) * 0.1), roll: true, rico: s.rico, dmg: s.dmg, w: 'pine', onHit: pineHit });
+        launch({ mesh: m, r: s.r, vel: shot.vel.clone().applyAxisAngle(UP, (i - (s.n - 1) / 2) * 0.1), glide: shot.glide, roll: true, rico: s.rico, dmg: s.dmg, w: 'pine', onHit: pineHit });
       }
       sfx.throw();
     },
@@ -141,13 +141,13 @@ const WEAPONS = {
       rico: mod.rico, cd: 0.13 * (lvl(L,3) ? 0.75 : 1) * (lvl(L,6) ? 0.75 : 1) / mod.haste, speed: 50 * mod.speed, r: 0.07 * mod.area,
     }),
     fire(s, target) {
-      const from = handPos(), base = arcTo(from, target, s.speed, 0.25);
+      const from = handPos(), shot = aimShot(from, target, s.speed);
       for (let i = 0; i < s.n; i++) {
         const g = new THREE.Group();
         const nut = new THREE.Mesh(acornGeo, LOOK.acorn); nut.scale.set(s.r, s.r * 1.25, s.r);
         const cap = new THREE.Mesh(capGeo, LOOK.acornCap); cap.scale.set(s.r * 1.1, s.r * 0.8, s.r * 1.1); cap.position.y = s.r * 0.4;
         g.add(nut, cap); g.position.copy(from);
-        launch({ mesh: g, r: s.r, vel: base.clone().applyAxisAngle(UP, (i - (s.n - 1) / 2) * 0.035), grav: 0.25, pierce: s.pierce, rico: s.rico, dmg: s.dmg, w: 'acorn', spin: 20,
+        launch({ mesh: g, r: s.r, vel: shot.vel.clone().applyAxisAngle(UP, (i - (s.n - 1) / 2) * 0.035), glide: shot.glide, grav: 0.25, pierce: s.pierce, rico: s.rico, dmg: s.dmg, w: 'acorn', spin: 20,
           dmgVs: e => (syn('honey') && e.poison ? (fz('honey') ? 3 : 2) : 1), onHit: acornHit });
       }
       sfx.sling();
@@ -156,7 +156,7 @@ const WEAPONS = {
 
   hive: {
     name: 'Beehive', kind: 'aimed', style: 'Aimed · area over time',
-    text: 'Lob a hive. It breaks into a bee swarm that poisons everything inside it.',
+    text: 'Throw a hive. It breaks into a bee swarm that poisons everything inside it.',
     ups: ['Swarm 30% wider', 'Swarm lasts 2 s longer', 'Bees sting 60% harder', 'Throws 2 hives',
       'Bees sting 60% harder', 'Swarm 30% wider', 'Throws 3 hives'],
     stats: L => ({
@@ -168,7 +168,7 @@ const WEAPONS = {
       for (let i = 0; i < s.n; i++) {
         const to = target.clone().add(P.set(i ? (Math.random() - 0.5) * 5 : 0, 0, i ? (Math.random() - 0.5) * 5 : 0));
         const m = new THREE.Mesh(hiveGeo, LOOK.hive); m.scale.set(0.2, 0.26, 0.2); m.position.copy(from);
-        launch({ mesh: m, r: 0.22, vel: arcTo(from, to, s.speed), dmg: 0, w: 'hive', spin: 6, burst: p => swarm(p, s.r, s.t, s.dps) });
+        launch({ mesh: m, r: 0.22, ...aimShot(from, to, s.speed), dmg: 0, w: 'hive', spin: 6, burst: p => swarm(p, s.r, s.t, s.dps) });
       }
       sfx.throw();
     },
@@ -176,7 +176,7 @@ const WEAPONS = {
 
   frost: {
     name: 'Frost Cone', kind: 'aimed', style: 'Aimed · crowd control',
-    text: 'Lob a frozen pinecone that bursts on impact, chilling creatures to half speed.',
+    text: 'Throw a frozen pinecone that bursts on impact, chilling creatures to half speed.',
     ups: ['Burst 30% wider', '+60% damage', 'Chill lasts 2 s longer', 'Freezes creatures solid for 1 s',
       'Burst 30% wider', '+60% damage', 'Throws 3 frost cones'],
     stats: L => ({
@@ -188,7 +188,7 @@ const WEAPONS = {
       for (let i = 0; i < s.n; i++) {
         const to = target.clone().add(P.set(i ? (Math.random() - 0.5) * 5 : 0, 0, i ? (Math.random() - 0.5) * 5 : 0));
         const m = new THREE.Mesh(frostGeo, LOOK.frost); m.scale.set(0.14, 0.22, 0.14); m.position.copy(from);
-        launch({ mesh: m, r: 0.18, vel: arcTo(from, to, s.speed), dmg: 0, w: 'frost', spin: 9, burst: p => frostBurst(p, s.r, s.dmg, s.chill, s.freeze) });
+        launch({ mesh: m, r: 0.18, ...aimShot(from, to, s.speed), dmg: 0, w: 'frost', spin: 9, burst: p => frostBurst(p, s.r, s.dmg, s.chill, s.freeze) });
       }
       sfx.throw();
     },
@@ -549,6 +549,7 @@ for (const box of document.querySelectorAll('.start-pick')) {
     startWeapon = b.dataset.id;
     try { localStorage.setItem('pinewood-start', startWeapon); } catch (err) { /* not remembered */ }
     renderStartPick();
+    if (!started) { resetWeapons(); refreshGear(); } // the title-screen ranger shows the new pick
     initAudio(); sfx.pick();
   });
 }

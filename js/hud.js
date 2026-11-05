@@ -49,6 +49,27 @@ function renderOwned() {
   if (got.length) html += '<div class="own-row">' + got.map(it => '<span class="item ' + it.rarity + '">' + it.name + (bag[it.id] > 1 ? '<b>×' + bag[it.id] + '</b>' : '') + '</span>').join('') + '</div>';
   $('owned').hidden = false;
   $('owned').innerHTML = html;
+  refreshGear(); // and show them on the ranger (gear.js)
+}
+
+/**
+ * The pause screen's item list: every item you hold, colored by rarity. Hovering (or
+ * tabbing to) one shows a card with what your copies add up to now, and what one more
+ * copy would add (and the new total).
+ */
+function renderPauseItems() {
+  const got = ITEMS.filter(it => bag[it.id]);
+  $('pause-items').innerHTML = !got.length ? '<div class="none">No items yet. Open chests (E) to find some.</div>'
+    : got.map(it => {
+      const n = bag[it.id];
+      return '<button type="button" class="item-chip ' + it.rarity + '">' + it.name + (n > 1 ? ' <b>×' + n + '</b>' : '') +
+        '<span class="tip" role="tooltip">' +
+          '<span class="tip-name ' + it.rarity + '">' + it.name + '</span><span class="tip-rarity">' + RARITY[it.rarity].name + ' · you have ' + n + '</span>' +
+          '<span class="tip-row"><i>Now</i>' + itemBonus(it, n) + '</span>' +
+          '<span class="tip-row"><i>Another copy</i>' + itemBonus(it, 1) + '</span>' +
+          '<span class="tip-row"><i>Then</i>' + itemBonus(it, n + 1) + '</span>' +
+        '</span></button>';
+    }).join('');
 }
 
 /** Restart a CSS animation class on an element (used for the level-up glow and threat flash). */

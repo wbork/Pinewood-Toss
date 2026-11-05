@@ -1,0 +1,5 @@
+running build_ranger.py
+head top 1.988, eyes (0.084, 1.897, 0.054), nose (0.0, 1.81, 0.255)
+68 parts, 2724 faces in all
+exported ranger: 22 bones, 31 materials, 3008 vertices, 5548 triangles → C:\Users\will.bork\OneDrive - JM Murray\Documents\Programs\PinewoodToss\js\models\ranger.js
+DONE
